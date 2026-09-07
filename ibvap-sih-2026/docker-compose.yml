@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: ibvap-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=production
+      - MONGO_URI=mongodb://mongodb:27017
+      - MONGO_DB_NAME=ibvap
+    depends_on:
+      mongodb:
+        condition: service_started
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: ibvap-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:6.0
+    container_name: ibvap-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
