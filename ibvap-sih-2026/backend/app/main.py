@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from app.config import settings
 from app.database import connect_to_mongo, close_mongo_connection
 from app.utils.logger import logger
-from app.routes import health, cameras, events, zones
+from app.routes import health, cameras, events, zones, evidence
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -53,3 +53,4 @@ app.include_router(health.router, prefix="/api")
 app.include_router(cameras.router, prefix="/api/cameras")
 app.include_router(events.router, prefix="/api/events")
 app.include_router(zones.router, prefix="/api/zones")
+app.include_router(evidence.router, prefix="/api/evidence")

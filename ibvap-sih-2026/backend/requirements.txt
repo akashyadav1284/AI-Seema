@@ -5,3 +5,5 @@ pydantic-settings
 motor
 pytest
 python-dotenv
+opencv-python-headless
+ultralytics
