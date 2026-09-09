@@ -1,12 +1,13 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from contextlib import asynccontextmanager
 
 from app.config import settings
 from app.database import connect_to_mongo, close_mongo_connection
 from app.utils.logger import logger
 from app.routes import health, cameras, events, zones
+from app.services.stream_service import generate_annotated_frames
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -53,3 +54,14 @@ app.include_router(health.router, prefix="/api")
 app.include_router(cameras.router, prefix="/api/cameras")
 app.include_router(events.router, prefix="/api/events")
 app.include_router(zones.router, prefix="/api/zones")
+
+@app.get("/stream/{camera_id}")
+async def stream(camera_id: str):
+    # For demo, mapping camera_id "0" to webcam source 0
+    # source can be an int or string. Let's pass 0 if "0" else the string.
+    source = 0 if camera_id == "0" else camera_id
+    
+    return StreamingResponse(
+        generate_annotated_frames(source),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
