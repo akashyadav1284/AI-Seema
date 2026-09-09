@@ -16,8 +16,8 @@ This repository currently contains **Phase 1** of the project. The goal of Phase
 
 ## 5. Architecture
 - **Frontend**: React + Vite + Tailwind CSS
-- **Backend**: FastAPI + Python 3.11+
-- **Database**: MongoDB
+- **Phase 1 (Foundation):** FastAPI + React Command Centre, MongoDB schema, structured logging.
+- **Phase 2 (Video Intelligence Engine):** YOLOv8n object detection, OpenCV frame processing, image quality metrics, CLI testing tools.
 
 ## 6. Technology Stack
 - **Frontend**: React, Vite, Tailwind CSS

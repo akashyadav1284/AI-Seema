@@ -1,46 +1,78 @@
 import cv2
 import numpy as np
+from typing import Optional, Dict, Any, Tuple
+from app.utils.logger import logger
 import time
 
 class VideoService:
-    def __init__(self, source):
-        """
-        source: int (webcam index) or str (RTSP URL / video file path)
-        """
+    def __init__(self, source_type: str, source: Any):
+        self.source_type = source_type
         self.source = source
-        self.cap = None
+        self.capture: Optional[cv2.VideoCapture] = None
+        
+        self.width = 0
+        self.height = 0
         self.fps = 0.0
-        self.last_frame_time = 0.0
+        self.total_frames = 0
+        self.current_frame = 0
+        self.is_opened = False
 
-    def open_stream(self):
-        self.cap = cv2.VideoCapture(self.source)
-        if not self.cap.isOpened():
-            raise RuntimeError(f"Cannot open video source: {self.source}")
-        self.fps = self.cap.get(cv2.CAP_PROP_FPS) or 0.0
+    def open(self) -> bool:
+        logger.info(f"Attempting to open video source: {self.source_type} -> {self.source}")
+        
+        try:
+            if self.source_type == "webcam":
+                self.capture = cv2.VideoCapture(int(self.source))
+            elif self.source_type in ["video", "rtsp"]:
+                self.capture = cv2.VideoCapture(self.source)
+            else:
+                logger.error(f"Unsupported source type: {self.source_type}")
+                return False
 
-    def read_frame(self):
-        if self.cap is None:
-            return None
-        ret, frame = self.cap.read()
-        if not ret:
-            return None
-        self.last_frame_time = time.time()
-        enhanced = enhance_low_light(frame)
-        return enhanced
+            if not self.capture or not self.capture.isOpened():
+                logger.error(f"Failed to open video source: {self.source}")
+                return False
+
+            self.width = int(self.capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+            self.height = int(self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            self.fps = self.capture.get(cv2.CAP_PROP_FPS)
+            self.total_frames = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
+            self.is_opened = True
+
+            logger.info(f"Successfully opened source. Resolution: {self.width}x{self.height}, FPS: {self.fps}")
+            return True
+        except Exception as e:
+            logger.error(f"Exception opening video source: {e}")
+            return False
+
+    def read_frame(self) -> Tuple[bool, Optional[Any]]:
+        if not self.is_opened or not self.capture:
+            return False, None
+            
+        ret, frame = self.capture.read()
+        if ret:
+            self.current_frame += 1
+            return True, frame
+        else:
+            return False, None
 
     def release(self):
-        if self.cap is not None:
-            self.cap.release()
-            self.cap = None
+        if self.capture:
+            logger.info("Releasing video source")
+            self.capture.release()
+            self.is_opened = False
+            self.capture = None
 
-    def get_health(self):
-        online = self.cap is not None and self.cap.isOpened()
+    def get_metadata(self) -> Dict[str, Any]:
         return {
-            "online": online,
+            "source_type": self.source_type,
+            "width": self.width,
+            "height": self.height,
             "fps": self.fps,
-            "last_frame_time": self.last_frame_time,
+            "total_frames": self.total_frames,
+            "current_frame": self.current_frame,
+            "is_opened": self.is_opened
         }
-
 
 def enhance_low_light(frame: np.ndarray) -> np.ndarray:
     # Convert to LAB

@@ -1,34 +1,55 @@
 import cv2
-from app.services.video_service import VideoService
+from app.services.video_service import VideoService, enhance_low_light
 from app.services.detector import Detector
+import time
 
 # Global detector instance so we don't reload the model on every stream connection
 detector = Detector()
+detector.initialize()
 
 def generate_annotated_frames(source):
-    video_service = VideoService(source)
+    # Parse source type (simple logic: int vs str)
     try:
-        video_service.open_stream()
+        source_val = int(source)
+        source_type = "webcam"
+    except ValueError:
+        source_type = "rtsp" if str(source).startswith("rtsp") else "video"
+        source_val = source
+
+    video_service = VideoService(source_type=source_type, source=source_val)
+    try:
+        success = video_service.open()
+        if not success:
+            return
+
+        frame_count = 0
         while True:
-            frame = video_service.read_frame()
-            if frame is None:
+            ret, frame = video_service.read_frame()
+            if not ret or frame is None:
                 # If stream ends or fails, we break out
                 break
-                
+            
+            frame_count += 1
+            
+            # Optionally enhance
+            enhanced = enhance_low_light(frame)
+            
             # Run detection
-            detections = detector.detect(frame)
+            result = detector.detect(enhanced, frame_number=frame_count)
+            detections = result.get("detections", [])
             
             # Draw bounding boxes and labels
             for det in detections:
-                x1, y1, x2, y2 = [int(v) for v in det["bbox"]]
-                label = f"{det['label']} {det['conf']:.2f}"
+                box = det["bbox"]
+                x1, y1, x2, y2 = int(box["x1"]), int(box["y1"]), int(box["x2"]), int(box["y2"])
+                label = f"{det['class_name']} {det['confidence']:.2f}"
                 # Green box
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.rectangle(enhanced, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 # White text
-                cv2.putText(frame, label, (x1, max(y1 - 10, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                cv2.putText(enhanced, label, (x1, max(y1 - 10, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
             
             # Encode frame as JPEG
-            ret, buffer = cv2.imencode('.jpg', frame)
+            ret, buffer = cv2.imencode('.jpg', enhanced)
             if not ret:
                 continue
                 
