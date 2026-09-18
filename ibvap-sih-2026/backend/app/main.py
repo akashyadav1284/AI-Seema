@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Query, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from contextlib import asynccontextmanager
@@ -9,6 +9,8 @@ from app.database import connect_to_mongo, close_mongo_connection
 from app.utils.logger import logger
 from app.routes import health, cameras, events, zones, evidence, auth, detections, ws, alerts, analytics
 from app.services.stream_service import generate_annotated_frames
+from app.routes.ws import get_ws_current_user
+from app.services import camera_service
 
 
 
@@ -74,7 +76,30 @@ app.include_router(alerts.router, prefix="/api/alerts")
 app.include_router(analytics.router)
 
 @app.get("/stream/{camera_id}")
-async def stream(camera_id: str):
+async def stream(camera_id: str, token: str = Query(None)):
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
+    user = await get_ws_current_user(token)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
+    # Check camera authorization
+    camera = await camera_service.get_camera_by_id(camera_id)
+    if not camera:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Camera not found"
+        )
+        
     return StreamingResponse(
         generate_annotated_frames(camera_id),
         media_type="multipart/x-mixed-replace; boundary=frame"
