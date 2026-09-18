@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, Outlet } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getHealth } from '../services/api';
 import { 
@@ -265,7 +265,7 @@ const Layout = ({ children }) => {
 
         {/* Page Content */}
         <div className="flex-1 overflow-auto p-4 lg:p-6 relative z-0 custom-scrollbar">
-          {children}
+          <Outlet />
         </div>
       </main>
     </div>
