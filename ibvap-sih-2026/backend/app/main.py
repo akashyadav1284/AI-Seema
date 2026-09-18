@@ -58,11 +58,7 @@ app.include_router(evidence.router, prefix="/api/evidence")
 
 @app.get("/stream/{camera_id}")
 async def stream(camera_id: str):
-    # For demo, mapping camera_id "0" to webcam source 0
-    # source can be an int or string. Let's pass 0 if "0" else the string.
-    source = 0 if camera_id == "0" else camera_id
-    
     return StreamingResponse(
-        generate_annotated_frames(source),
+        generate_annotated_frames(camera_id),
         media_type="multipart/x-mixed-replace; boundary=frame"
     )

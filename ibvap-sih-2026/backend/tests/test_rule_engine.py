@@ -1,5 +1,5 @@
 import pytest
-from app.services.rule_engine import RuleEngine, VirtualFenceRule, RestrictedZoneRule, LoiteringRule, WrongDirectionRule, CrowdRule
+from app.services.rule_engine import RuleEngine, VirtualFenceRule, RestrictedZoneRule, LoiteringRule, WrongDirectionRule, CrowdRule, NightActivityRule
 
 def test_virtual_fence_crossing():
     engine = RuleEngine("cam_1")
@@ -24,7 +24,7 @@ def test_virtual_fence_crossing():
     track["centroid"] = {"x": 60, "y": 50}
     alerts = engine.evaluate([track])
     assert len(alerts) == 1
-    assert alerts[0]["rule_type"] == "VIRTUAL_FENCE"
+    assert alerts[0]["event_type"] == "VIRTUAL_FENCE"
     assert alerts[0]["severity"] == "HIGH"
 
 def test_restricted_zone_enter():
@@ -48,7 +48,7 @@ def test_restricted_zone_enter():
     track["centroid"] = {"x": 20, "y": 20}
     alerts = engine.evaluate([track])
     assert len(alerts) == 1
-    assert alerts[0]["rule_type"] == "RESTRICTED_ZONE"
+    assert alerts[0]["event_type"] == "RESTRICTED_ZONE"
     assert "entered" in alerts[0]["reason"]
     
     # Inside -> Inside (No alert because trigger_on="ENTER")
@@ -120,7 +120,7 @@ def test_loitering_rule():
     res3 = rule.evaluate(track, 102.5) # Exceeded 2.0 seconds!
     assert res3 is not None
     assert res3["triggered"] is True
-    assert res3["rule_type"] == "LOITERING"
+    assert res3["event_type"] == "LOITERING"
 
 def test_wrong_direction_rule():
     polygon = [{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 100, "y": 100}, {"x": 0, "y": 100}]
@@ -138,7 +138,7 @@ def test_wrong_direction_rule():
     track_left = {"active": True, "track_id": 1, "direction": "LEFT", "centroid": {"x": 50, "y": 50}}
     res = rule.evaluate(track_left, 100.0)
     assert res is not None
-    assert res["rule_type"] == "WRONG_DIRECTION"
+    assert res["event_type"] == "WRONG_DIRECTION"
     
     # Moving LEFT (prohibited) but OUTSIDE polygon
     track_left_out = {"active": True, "track_id": 1, "direction": "LEFT", "centroid": {"x": 200, "y": 200}}
@@ -166,5 +166,164 @@ def test_crowd_rule():
     ]
     res = rule.evaluate_group(tracks_2, 100.0)
     assert res is not None
-    assert res["rule_type"] == "CROWD"
+    assert res["event_type"] == "CROWD"
     assert "2 people" in res["reason"]
+
+def test_night_activity_rule(monkeypatch):
+    engine = RuleEngine("cam_1")
+    engine.add_rule(NightActivityRule("R6", "Z1", None))
+
+    # Force night mode to True
+    monkeypatch.setattr(RuleEngine, "is_night_time_static", staticmethod(lambda: True))
+
+    track = {
+        "active": True, "track_id": 1, "class_name": "person", "centroid": {"x": 50, "y": 50}
+    }
+    alerts = engine.evaluate([track])
+    assert len(alerts) == 1
+    assert alerts[0]["event_type"] == "NIGHT_ACTIVITY"
+
+    # Force night mode to False
+    monkeypatch.setattr(RuleEngine, "is_night_time_static", staticmethod(lambda: False))
+    
+    # Engine is_night_time instance method uses is_night_time_static, so no need to mock both
+    alerts = engine.evaluate([track])
+    assert len(alerts) == 0
+
+def test_rule_disabled():
+    engine = RuleEngine("cam_1")
+    rule = VirtualFenceRule(
+        rule_id="R1", zone_id="F1", 
+        point_a={"x": 50, "y": 0}, point_b={"x": 50, "y": 100},
+        enabled=False
+    )
+    engine.add_rule(rule)
+    
+    track = {
+        "active": True, "track_id": 1, "class_name": "person",
+        "previous_centroid": {"x": 40, "y": 50}, "centroid": {"x": 60, "y": 50}
+    }
+    alerts = engine.evaluate([track])
+    assert len(alerts) == 0
+
+def test_rule_exception_isolation():
+    engine = RuleEngine("cam_1")
+    
+    class FaultyRule(VirtualFenceRule):
+        def evaluate(self, track, timestamp):
+            raise ValueError("Something went wrong!")
+            
+    engine.add_rule(FaultyRule("R1", "Z1", {"x": 0, "y": 0}, {"x": 10, "y": 10}))
+    engine.add_rule(VirtualFenceRule("R2", "Z2", {"x": 50, "y": 0}, {"x": 50, "y": 100}))
+    
+    track = {
+        "active": True, "track_id": 1, "class_name": "person",
+        "previous_centroid": {"x": 40, "y": 50}, "centroid": {"x": 60, "y": 50}
+    }
+    # Should not crash and should still return alert for R2
+    alerts = engine.evaluate([track])
+    assert len(alerts) == 1
+    assert alerts[0]["rule_id"] == "R2"
+
+def test_loitering_rule_cleanup():
+    engine = RuleEngine("cam_1")
+    polygon = [{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 100, "y": 100}, {"x": 0, "y": 100}]
+    rule = LoiteringRule("R3", "Z1", polygon, threshold_seconds=2)
+    engine.add_rule(rule)
+    
+    track = {
+        "active": True, "track_id": 1, "class_name": "person", "centroid": {"x": 50, "y": 50}
+    }
+    
+    # Frame 1: track 1 enters
+    engine.evaluate([track])
+    assert 1 in rule.entry_times
+    
+    # Frame 2: track 1 disappears, empty tracks list passed
+    engine.evaluate([])
+    
+    # State should be cleaned up
+    assert 1 not in rule.entry_times
+
+def test_invalid_missing_centroids():
+    engine = RuleEngine("cam_1")
+    engine.add_rule(VirtualFenceRule(
+        rule_id="R1", zone_id="F1", 
+        point_a={"x": 50, "y": 0}, point_b={"x": 50, "y": 100}
+    ))
+    
+    # Missing centroid entirely
+    track_no_centroid = {
+        "active": True, "track_id": 1, "class_name": "person",
+        "previous_centroid": {"x": 40, "y": 50}
+    }
+    alerts = engine.evaluate([track_no_centroid])
+    assert len(alerts) == 0
+    
+    # Malformed centroid
+    track_bad_centroid = {
+        "active": True, "track_id": 1, "class_name": "person",
+        "previous_centroid": {"x": 40, "y": 50},
+        "centroid": {"x": 60} # missing y
+    }
+    alerts = engine.evaluate([track_bad_centroid])
+    assert len(alerts) == 0
+
+def test_target_classes_filtering():
+    engine = RuleEngine("cam_1")
+    polygon = [{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 100, "y": 100}, {"x": 0, "y": 100}]
+    engine.add_rule(RestrictedZoneRule(
+        "R2", "Z1", polygon, "ENTER", target_classes=["person"]
+    ))
+    
+    # Car should not trigger
+    track_car = {
+        "active": True, "track_id": 2, "class_name": "car",
+        "previous_centroid": {"x": -10, "y": 50}, "centroid": {"x": 50, "y": 50}
+    }
+    alerts = engine.evaluate([track_car])
+    assert len(alerts) == 0
+    
+    # Person should trigger
+    track_person = {
+        "active": True, "track_id": 3, "class_name": "person",
+        "previous_centroid": {"x": -10, "y": 50}, "centroid": {"x": 50, "y": 50}
+    }
+    alerts = engine.evaluate([track_person])
+    assert len(alerts) == 1
+
+def test_night_time_overnight_ranges(monkeypatch):
+    import datetime
+    from app.config import settings
+
+    # Case 1: Overnight range 22:00 -> 06:00
+    monkeypatch.setattr(settings, "NIGHT_START_TIME", "22:00")
+    monkeypatch.setattr(settings, "NIGHT_END_TIME", "06:00")
+
+    # Time is 23:00 (inside night)
+    class MockDatetime23(datetime.datetime):
+        @classmethod
+        def now(cls):
+            return datetime.datetime(2026, 1, 1, 23, 0, 0)
+    
+    monkeypatch.setattr("app.services.rule_engine.datetime", MockDatetime23)
+    assert RuleEngine.is_night_time_static() is True
+
+    # Time is 03:00 (inside night)
+    class MockDatetime03(datetime.datetime):
+        @classmethod
+        def now(cls):
+            return datetime.datetime(2026, 1, 1, 3, 0, 0)
+    
+    monkeypatch.setattr("app.services.rule_engine.datetime", MockDatetime03)
+    assert RuleEngine.is_night_time_static() is True
+
+    # Time is 12:00 (outside night)
+    class MockDatetime12(datetime.datetime):
+        @classmethod
+        def now(cls):
+            return datetime.datetime(2026, 1, 1, 12, 0, 0)
+    
+    monkeypatch.setattr("app.services.rule_engine.datetime", MockDatetime12)
+    assert RuleEngine.is_night_time_static() is False
+

@@ -12,8 +12,10 @@ class Detector:
     def __init__(self):
         self.model_path = settings.YOLO_MODEL_PATH
         self.confidence_threshold = settings.YOLO_CONFIDENCE_THRESHOLD
+        self.iou_threshold = settings.YOLO_IOU_THRESHOLD
         self.device = settings.YOLO_DEVICE
         self.model: Optional[YOLO] = None
+        self.allowed_classes = settings.YOLO_ALLOWED_CLASSES
         
         # Mapping standard YOLOv8 COCO classes to our target classes
         # 0: person, 2: car, 3: motorcycle, 5: bus, 7: truck
@@ -74,19 +76,28 @@ class Detector:
             logger.error("Detector not initialized")
             return {"error": "Model not initialized", "detections": []}
 
+        if not isinstance(frame, np.ndarray) or frame.size == 0:
+            logger.error("Invalid frame provided to detector")
+            return {"error": "Invalid frame", "detections": []}
+
         start_time = time.perf_counter()
         
         # Quality assessment
         quality_metrics = self.assess_image_quality(frame)
         
         # Inference
-        results = self.model.predict(
-            source=frame,
-            conf=self.confidence_threshold,
-            classes=list(self.target_classes.keys()),
-            imgsz=settings.YOLO_IMAGE_SIZE,
-            verbose=False
-        )
+        try:
+            results = self.model.predict(
+                source=frame,
+                conf=self.confidence_threshold,
+                iou=self.iou_threshold,
+                classes=self.allowed_classes,
+                imgsz=settings.YOLO_IMAGE_SIZE,
+                verbose=False
+            )
+        except Exception as e:
+            logger.error(f"YOLO inference failed: {e}")
+            return {"error": "Inference failed", "detections": []}
         
         process_time = time.perf_counter() - start_time
         fps = 1.0 / process_time if process_time > 0 else 0.0

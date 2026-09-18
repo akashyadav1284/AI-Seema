@@ -25,11 +25,19 @@ def test_generate_event_id():
     assert event_id.startswith("EVT-")
     assert len(event_id) > 10
 
+def test_sanitize_event_id():
+    service = EventService()
+    bad_id = "../../etc/passwd"
+    safe_id = service.sanitize_event_id(bad_id)
+    assert ".." not in safe_id
+    assert "/" not in safe_id
+    assert safe_id == "etcpasswd"
+
 def test_create_event_from_alert():
     service = EventService()
     alert = {
         "rule_id": "R1",
-        "rule_type": "VIRTUAL_FENCE",
+        "event_type": "VIRTUAL_FENCE",
         "severity": "HIGH",
         "camera_id": "cam_1",
         "track_id": 5,
@@ -49,20 +57,44 @@ def test_create_event_from_alert():
     assert event.event_id.startswith("EVT-")
 
 @patch("cv2.imwrite")
-def test_save_snapshot(mock_imwrite):
+@patch("cv2.rectangle")
+@patch("cv2.putText")
+def test_save_snapshot_with_bbox(mock_puttext, mock_rectangle, mock_imwrite):
     mock_imwrite.return_value = True
     service = EventService()
     dummy_frame = np.zeros((100, 100, 3), dtype=np.uint8)
+    alert = {
+        "event_type": "RESTRICTED_ZONE",
+        "track_id": 1,
+        "bbox": {"x1": 10, "y1": 10, "x2": 50, "y2": 50}
+    }
     
-    path = service.save_snapshot(dummy_frame, "EVT-TEST-123")
+    path = service.save_snapshot(dummy_frame, "EVT-TEST-123", alert)
     assert path is not None
     assert "EVT-TEST-123.jpg" in path
+    
+    # Ensure drawing functions were called
+    mock_rectangle.assert_called_once()
+    assert mock_puttext.call_count == 2 # 1 for label, 1 for overlay
     mock_imwrite.assert_called_once()
+
+def test_malformed_alert_handling():
+    service = EventService()
+    
+    # Missing required pydantic fields that normally crash
+    alert = {}
+    
+    # Should safely fallback
+    event = service.create_event_from_alert(alert)
+    assert event is not None
+    assert event.event_type == "UNKNOWN_ALERT"
+    assert event.camera_id == "UNKNOWN_CAM"
+    assert event.track_id == -1
 
 @pytest.mark.anyio
 async def test_save_event_to_db(mock_db):
     service = EventService()
-    alert = {"rule_type": "TEST", "reason": "test"}
+    alert = {"event_type": "TEST", "reason": "test"}
     event = service.create_event_from_alert(alert)
     
     success = await service.save_event_to_db(event)

@@ -17,10 +17,17 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     # Phase 2: Video Intelligence Configuration
+    VIDEO_FRAME_SKIP: int = 1
+    RTSP_RECONNECT_RETRIES: int = 5
+    RTSP_RECONNECT_DELAY: int = 5
+    VIDEO_BUFFER_SIZE: int = 30
+    
     YOLO_MODEL_PATH: str = "yolov8n.pt"
     YOLO_CONFIDENCE_THRESHOLD: float = 0.40
+    YOLO_IOU_THRESHOLD: float = 0.45
     YOLO_IMAGE_SIZE: int = 640
     YOLO_DEVICE: str = "auto"
+    YOLO_ALLOWED_CLASSES: List[int] = [0, 2, 3, 5, 7]
     
     LOW_LIGHT_BRIGHTNESS_THRESHOLD: float = 50.0
     VERY_DARK_BRIGHTNESS_THRESHOLD: float = 20.0
@@ -32,6 +39,13 @@ class Settings(BaseSettings):
     TRACKER_MIN_HITS: int = 3
     HISTORY_MAX_LENGTH: int = 50
     MOVEMENT_STATIONARY_THRESHOLD: float = 2.0
+    
+    # ByteTrack specific parameters
+    TRACK_HIGH_THRESH: float = 0.5
+    TRACK_LOW_THRESH: float = 0.1
+    NEW_TRACK_THRESH: float = 0.6
+    MATCH_THRESH: float = 0.8
+    FUSE_SCORE: bool = True
 
     # Phase 4: Security Rule Engine Configuration
     ALERT_COOLDOWN_SECONDS: int = 60

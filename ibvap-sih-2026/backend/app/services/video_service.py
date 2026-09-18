@@ -3,6 +3,17 @@ import numpy as np
 from typing import Optional, Dict, Any, Tuple
 from app.utils.logger import logger
 import time
+import threading
+import queue
+from app.config import settings
+
+import re
+
+def _mask_url(url: Any) -> str:
+    if isinstance(url, str):
+        # Mask rtsp://user:password@ip -> rtsp://user:***@ip
+        return re.sub(r'(rtsp://[^:]+:)[^@]+(@.*)', r'\1***\2', url)
+    return str(url)
 
 class VideoService:
     def __init__(self, source_type: str, source: Any):
@@ -16,9 +27,14 @@ class VideoService:
         self.total_frames = 0
         self.current_frame = 0
         self.is_opened = False
+        
+        self.frame_queue = queue.Queue(maxsize=settings.VIDEO_BUFFER_SIZE)
+        self._stop_event = threading.Event()
+        self._reader_thread = None
 
     def open(self) -> bool:
-        logger.info(f"Attempting to open video source: {self.source_type} -> {self.source}")
+        safe_source = _mask_url(self.source)
+        logger.info(f"Attempting to open video source: {self.source_type} -> {safe_source}")
         
         try:
             if self.source_type == "webcam":
@@ -30,7 +46,7 @@ class VideoService:
                 return False
 
             if not self.capture or not self.capture.isOpened():
-                logger.error(f"Failed to open video source: {self.source}")
+                logger.error(f"Failed to open video source: {_mask_url(self.source)}")
                 return False
 
             self.width = int(self.capture.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -45,18 +61,93 @@ class VideoService:
             logger.error(f"Exception opening video source: {e}")
             return False
 
+    def start(self):
+        """Starts the background frame reader thread."""
+        if not self.is_opened:
+            return
+        self._stop_event.clear()
+        self._reader_thread = threading.Thread(target=self._update, daemon=True)
+        self._reader_thread.start()
+
+    def _reconnect(self) -> bool:
+        """Attempts to reconnect to an RTSP stream."""
+        if self.source_type != "rtsp":
+            return False
+            
+        logger.warning(f"Connection lost. Reconnecting to RTSP: {_mask_url(self.source)}")
+        if self.capture:
+            self.capture.release()
+            self.capture = None
+            self.is_opened = False
+            
+        for attempt in range(1, settings.RTSP_RECONNECT_RETRIES + 1):
+            if self._stop_event.is_set():
+                break
+            logger.info(f"RTSP Reconnect attempt {attempt}/{settings.RTSP_RECONNECT_RETRIES}")
+            if self.open():
+                logger.info("Successfully reconnected to RTSP stream.")
+                return True
+            time.sleep(settings.RTSP_RECONNECT_DELAY)
+            
+        logger.error("Failed to reconnect to RTSP stream after all attempts.")
+        return False
+
+    def _update(self):
+        while not self._stop_event.is_set():
+            if not self.is_opened or not self.capture:
+                time.sleep(0.1)
+                continue
+                
+            ret, frame = self.capture.read()
+            if not ret or frame is None or frame.size == 0:
+                if self.source_type == "rtsp":
+                    if not self._reconnect():
+                        self._stop_event.set()
+                        break
+                    continue
+                else:
+                    # For video files or webcam, we just stop on EOF or failure
+                    self._stop_event.set()
+                    break
+                    
+            # If queue is full, drop the oldest frame to avoid latency
+            if self.frame_queue.full():
+                try:
+                    self.frame_queue.get_nowait()
+                except queue.Empty:
+                    pass
+            self.frame_queue.put(frame)
+
     def read_frame(self) -> Tuple[bool, Optional[Any]]:
-        if not self.is_opened or not self.capture:
+        """Reads the next available frame from the background queue."""
+        if not self.is_opened and self.frame_queue.empty():
             return False, None
             
-        ret, frame = self.capture.read()
-        if ret:
+        try:
+            # We use a short timeout to periodically check if the thread stopped
+            # (e.g. video ended) instead of blocking forever.
+            frame = self.frame_queue.get(timeout=0.1)
             self.current_frame += 1
             return True, frame
-        else:
-            return False, None
+        except queue.Empty:
+            if self._stop_event.is_set():
+                return False, None
+            # Return true with None if we're just waiting for a frame on a live stream
+            # The caller should ignore it and continue.
+            return True, None
 
     def release(self):
+        self._stop_event.set()
+        if self._reader_thread:
+            self._reader_thread.join(timeout=1.0)
+            
+        # Flush queue
+        while not self.frame_queue.empty():
+            try:
+                self.frame_queue.get_nowait()
+            except queue.Empty:
+                break
+                
         if self.capture:
             logger.info("Releasing video source")
             self.capture.release()
