@@ -24,8 +24,7 @@ async def get_token():
             res = await client.post("/api/auth/register", json={
                 "email": "ai_test@example.com",
                 "password": "Password123!",
-                "first_name": "AI",
-                "last_name": "Test",
+                "name": "AI Test",
                 "role": "admin"
             })
         except Exception:
