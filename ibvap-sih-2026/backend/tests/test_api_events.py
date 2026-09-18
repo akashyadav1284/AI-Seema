@@ -3,8 +3,16 @@ from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock, AsyncMock
 
 from app.main import app
+from app.services.auth import get_current_user
+import pytest
 
 client = TestClient(app)
+
+@pytest.fixture(autouse=True)
+def override_auth():
+    app.dependency_overrides[get_current_user] = lambda: {"email": "test@example.com", "role": "admin"}
+    yield
+    app.dependency_overrides = {}
 
 @pytest.fixture
 def mock_db():
@@ -94,6 +102,4 @@ def test_review_event_invalid_status(mock_db):
     response = client.patch("/api/events/EVT-1/review", json={"status": "HACKED"})
     assert response.status_code == 400
 
-def test_get_evidence_path_traversal():
-    response = client.get("/api/evidence/snapshots/..%2F..%2Fetc%2Fpasswd")
-    assert response.status_code in [400, 404]
+

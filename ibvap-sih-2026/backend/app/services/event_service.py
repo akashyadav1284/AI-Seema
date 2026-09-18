@@ -134,7 +134,18 @@ class EventService:
             
         try:
             # Insert dict representation
-            result = await db["events"].insert_one(event.dict())
+            result = await db["events"].insert_one(event.model_dump())
+            if result.acknowledged:
+                from app.services.websocket_manager import websocket_manager
+                from app.services.alert_service import alert_service
+                
+                # Broadcast event
+                import asyncio
+                asyncio.create_task(websocket_manager.broadcast_event(event.model_dump()))
+                
+                # Process for potential alert
+                asyncio.create_task(alert_service.process_event(event))
+                
             return result.acknowledged
         except Exception as e:
             print(f"Failed to save event {event.event_id} to DB: {e}")

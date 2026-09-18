@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from app.config import settings
 from app.database import connect_to_mongo, close_mongo_connection
 from app.utils.logger import logger
-from app.routes import health, cameras, events, zones, evidence
+from app.routes import health, cameras, events, zones, evidence, auth, detections, ws, alerts, analytics
 from app.services.stream_service import generate_annotated_frames
 
 @asynccontextmanager
@@ -35,6 +35,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Security Headers Middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
 # Global exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -51,10 +60,15 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # Routes
 app.include_router(health.router, prefix="/api")
+app.include_router(auth.router, prefix="/api/auth")
 app.include_router(cameras.router, prefix="/api/cameras")
 app.include_router(events.router, prefix="/api/events")
 app.include_router(zones.router, prefix="/api/zones")
 app.include_router(evidence.router, prefix="/api/evidence")
+app.include_router(detections.router, prefix="/api/detections")
+app.include_router(ws.router, prefix="/api/ws")
+app.include_router(alerts.router, prefix="/api/alerts")
+app.include_router(analytics.router)
 
 @app.get("/stream/{camera_id}")
 async def stream(camera_id: str):

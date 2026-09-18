@@ -4,7 +4,7 @@ from typing import List, Union
 class Settings(BaseSettings):
     APP_NAME: str = "IBVAP"
     APP_ENV: str = "development"
-    DEBUG: bool = True
+    DEBUG: bool = False
     
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
@@ -56,6 +56,11 @@ class Settings(BaseSettings):
 
     # Phase 5: Event Storage & Evidence
     EVIDENCE_DIR: str = "../data/evidence"
+
+    # Authentication & JWT Security
+    JWT_SECRET: str = "changeme_in_production_super_secret_key"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_MINUTES: int = 60 * 24 * 7 # 7 days
 
     class Config:
         env_file = ".env"

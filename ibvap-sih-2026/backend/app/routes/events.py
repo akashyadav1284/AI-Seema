@@ -4,6 +4,8 @@ from datetime import datetime
 
 from app.database import get_db, is_db_connected
 from app.models.event import SecurityEvent, EventReviewUpdate, PaginatedEventResponse
+from app.services.auth import get_current_user, RoleChecker
+from fastapi import Depends
 
 router = APIRouter(tags=["Events"])
 
@@ -19,7 +21,8 @@ async def get_events(
     start_time: Optional[float] = None,
     end_time: Optional[float] = None,
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100)
+    limit: int = Query(50, ge=1, le=100),
+    current_user: dict = Depends(RoleChecker(["admin", "operator", "viewer"]))
 ):
     if not is_db_connected():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Database not available")
@@ -62,10 +65,13 @@ async def get_events(
             limit=limit
         )
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database query failed: {str(e)}")
+        # Import logger here or rely on the fact that we don't leak internal DB details
+        import logging
+        logging.error(f"Database query failed: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database query failed.")
 
 @router.get("/{event_id}", response_model=SecurityEvent)
-async def get_event_by_id(event_id: str):
+async def get_event_by_id(event_id: str, current_user: dict = Depends(RoleChecker(["admin", "operator", "viewer"]))):
     if not is_db_connected():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Database not available")
         
@@ -78,7 +84,7 @@ async def get_event_by_id(event_id: str):
     return SecurityEvent(**event)
 
 @router.patch("/{event_id}/review", response_model=SecurityEvent)
-async def review_event(event_id: str, review: EventReviewUpdate):
+async def review_event(event_id: str, review: EventReviewUpdate, current_user: dict = Depends(RoleChecker(["admin", "operator"]))):
     if not is_db_connected():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Database not available")
         
