@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { socket, connectSocket, disconnectSocket } from '../services/socket';
+import { socketService } from '../services/socket';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/Table';
@@ -10,22 +10,21 @@ const Tracks = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    connectSocket();
-    
     // Listen for tracks_update event
-    socket.on('tracks_update', (data) => {
+    const handleTracksUpdate = (data) => {
       // Assuming data is an array of active tracks or an object containing them
       const updatedTracks = Array.isArray(data) ? data : data.tracks || [];
       setTracks(updatedTracks);
       setIsLoading(false);
-    });
+    };
+
+    socketService.on('tracks_update', handleTracksUpdate);
 
     // Timeout to clear loading state if no data
     const timeout = setTimeout(() => setIsLoading(false), 2000);
 
     return () => {
-      socket.off('tracks_update');
-      disconnectSocket();
+      socketService.off('tracks_update', handleTracksUpdate);
       clearTimeout(timeout);
     };
   }, []);

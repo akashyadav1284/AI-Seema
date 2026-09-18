@@ -88,8 +88,9 @@ export const getAnalyticsTrends = () => fetchWithAuth('/api/analytics/events/tre
 export const getAnalyticsAlerts = () => fetchWithAuth('/api/analytics/alerts');
 
 // --- EVIDENCE ---
-export const fetchEvidenceBlob = async (path) => {
-  const response = await fetch(`${API_BASE_URL}/api/evidence/snapshots/${path}`, {
+export const fetchEvidenceBlob = async (path, type = 'snapshot') => {
+  const endpoint = type === 'clip' ? `/api/evidence/clips/${path}` : `/api/evidence/snapshots/${path}`;
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     headers: getAuthHeaders(),
   });
   if (!response.ok) {

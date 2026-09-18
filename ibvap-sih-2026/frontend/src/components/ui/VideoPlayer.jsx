@@ -18,8 +18,11 @@ export const VideoPlayer = ({ src, cameraName, capabilities = [], detections = [
   const retryTimer = useRef(null);
 
   // Derive unique src to force reload (avoids browser caching broken streams)
+  const token = localStorage.getItem('token');
+  const tokenParam = token ? `token=${encodeURIComponent(token)}` : '';
+  const baseSrc = `${src}${src.includes('?') ? '&' : '?'}${tokenParam}`;
   const streamSrc = (status === 'CONNECTING' || status === 'RECONNECTING' || status === 'LIVE' || status === 'BUFFERING') 
-    ? `${src}${src.includes('?') ? '&' : '?'}t=${Date.now()}` 
+    ? `${baseSrc}&t=${Date.now()}` 
     : '';
 
   // Setup Buffering Timeout

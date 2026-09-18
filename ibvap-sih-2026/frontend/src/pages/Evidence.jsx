@@ -4,37 +4,59 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Image as ImageIcon, Video, Search, Download, Calendar, Loader2, ExternalLink } from 'lucide-react';
 
-const SecureImage = ({ filename, alt, className }) => {
+const SecureMedia = ({ filename, type = 'snapshot', alt, className }) => {
   const [blobUrl, setBlobUrl] = useState(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     let url = null;
     if (filename) {
-      fetchEvidenceBlob(filename)
+      fetchEvidenceBlob(filename, type)
         .then(blob => {
           url = URL.createObjectURL(blob);
           setBlobUrl(url);
         })
         .catch(err => {
-          console.error("Failed to fetch image blob", err);
+          console.error("Failed to fetch media blob", err);
           setError(true);
         });
     }
     return () => {
       if (url) URL.revokeObjectURL(url);
     };
-  }, [filename]);
+  }, [filename, type]);
 
   if (error) {
+    if (type === 'clip') {
+      return (
+        <div className={`${className} flex flex-col items-center justify-center bg-slate-900`}>
+          <Video className="w-12 h-12 text-slate-600 mb-2" />
+          <span className="text-slate-400 text-sm">Media Not Found</span>
+        </div>
+      );
+    }
     return <img src="https://placehold.co/600x400/1e293b/475569?text=Image+Not+Found" alt="Not found" className={className} />;
   }
 
   if (!blobUrl) {
     return (
-      <div className={`${className} flex items-center justify-center bg-slate-900`}>
-         <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      <div className={`${className} flex flex-col items-center justify-center bg-slate-900`}>
+         <Loader2 className="w-6 h-6 animate-spin text-primary mb-2" />
+         <span className="text-xs text-slate-400 font-medium">Loading Media...</span>
       </div>
+    );
+  }
+
+  if (type === 'clip') {
+    return (
+      <video 
+        src={blobUrl} 
+        controls 
+        autoPlay 
+        loop 
+        muted 
+        className={className} 
+      />
     );
   }
 
@@ -61,7 +83,7 @@ const Evidence = () => {
           return {
             id: e.event_id || e.id,
             eventId: e.event_id || e.id,
-            type: 'snapshot', // Default since backend currently mostly returns snapshots
+            type: e.evidence?.type || 'snapshot', // Support backend specifying type, else default to snapshot
             filename: filename,
             timestamp: e.timestamp,
             camera: e.camera_id,
@@ -147,11 +169,12 @@ const Evidence = () => {
             {filteredItems.map(item => (
               <Card key={item.id} className="overflow-hidden group hover:border-primary/50 transition-colors">
                 <div className="aspect-video relative bg-black flex items-center justify-center overflow-hidden">
-                   {item.type === 'snapshot' && item.filename ? (
-                     <SecureImage 
+                   {item.filename ? (
+                     <SecureMedia 
                        filename={item.filename}
+                       type={item.type}
                        alt="Evidence" 
-                       className="w-full h-full object-contain"
+                       className="w-full h-full object-contain bg-slate-950"
                      />
                    ) : (
                      <div className="w-full h-full flex items-center justify-center bg-slate-900">
