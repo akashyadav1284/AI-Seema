@@ -79,12 +79,12 @@ def test_list_alerts(mock_db_conn, mock_get_alerts, mock_admin_user):
 @patch("app.routes.alerts.is_db_connected", return_value=True)
 def test_acknowledge_alert_admin(mock_db_conn, mock_update_status, mock_admin_user):
     mock_update_status.return_value = {"alert_id": "ALT-1", "status": "ACKNOWLEDGED", "event_id": "E", "camera_id": "C", "alert_type": "T", "severity": "S", "message": "M", "created_at": 1.0}
-    response = client.post("/api/alerts/ALT-1/acknowledge")
+    response = client.patch("/api/alerts/ALT-1/acknowledge")
     assert response.status_code == 200
     assert response.json()["status"] == "ACKNOWLEDGED"
 
 def test_acknowledge_alert_viewer(mock_viewer_user):
-    response = client.post("/api/alerts/ALT-1/acknowledge")
+    response = client.patch("/api/alerts/ALT-1/acknowledge")
     assert response.status_code == 403
 
 @patch("app.routes.alerts.alert_service.update_alert_status", new_callable=AsyncMock)
@@ -99,6 +99,6 @@ def test_resolve_alert_admin(mock_db_conn, mock_update_status, mock_admin_user):
 @patch("app.routes.alerts.is_db_connected", return_value=True)
 def test_invalid_lifecycle_transition(mock_db_conn, mock_update_status, mock_admin_user):
     mock_update_status.side_effect = ValueError("Cannot acknowledge alert from state RESOLVED")
-    response = client.post("/api/alerts/ALT-1/acknowledge")
+    response = client.patch("/api/alerts/ALT-1/acknowledge")
     assert response.status_code == 400
     assert "Cannot acknowledge" in response.json()["detail"]

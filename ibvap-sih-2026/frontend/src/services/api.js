@@ -78,7 +78,7 @@ export const getZone = (id) => fetchWithAuth(`/api/zones/${id}`);
 // --- ALERTS ---
 export const getAlerts = () => fetchWithAuth('/api/alerts/');
 export const getAlert = (id) => fetchWithAuth(`/api/alerts/${id}`);
-export const acknowledgeAlert = (id) => fetchWithAuth(`/api/alerts/${id}/acknowledge`, { method: 'POST' });
+export const acknowledgeAlert = (id) => fetchWithAuth(`/api/alerts/${id}/acknowledge`, { method: 'PATCH' });
 export const resolveAlert = (id, notes = "") => fetchWithAuth(`/api/alerts/${id}/resolve`, { method: 'POST', body: JSON.stringify({ notes }) });
 
 // --- ANALYTICS ---
