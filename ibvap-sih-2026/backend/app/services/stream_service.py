@@ -1,20 +1,19 @@
 import cv2
+import json
+import httpx
 from starlette.concurrency import run_in_threadpool
 from app.services.video_service import VideoService, enhance_low_light
 from app.services.detector import Detector
 from app.services.tracker import TrackerService
-from app.services.rule_engine import RuleEngine, RestrictedZoneRule, VirtualFenceRule
-from app.services.event_service import EventService
 from app.services.config_service import ConfigService
+from app.routes.auth import create_access_token
+from app.models.detection import DetectionPayload, TrackedDetection
 from app.config import settings
 import time
 
 # Global detector instance so we don't reload the model on every stream connection
 detector = Detector()
 detector.initialize()
-
-# Global event service
-event_service = EventService()
 
 async def generate_annotated_frames(camera_id: str):
     # Dynamically fetch camera configuration
@@ -37,39 +36,13 @@ async def generate_annotated_frames(camera_id: str):
 
     video_service = VideoService(source_type=source_type, source=source_val)
     tracker = TrackerService(camera_id=camera_id)
-    rule_engine = RuleEngine(camera_id=camera_id)
     
-    # Dynamically fetch zones
+    # Dynamically fetch zones and fences for annotation only
     zones = await ConfigService.get_zones(camera_id)
-    if zones:
-        for z in zones:
-            polygon = z.get("polygon", [])
-            if len(polygon) >= 3:
-                rule_engine.add_rule(RestrictedZoneRule(
-                    rule_id=str(z.get("_id", z.get("zone_id", "UNKNOWN"))),
-                    zone_id=z.get("zone_id", "UNKNOWN"),
-                    polygon=polygon,
-                    trigger_on="ENTER",
-                    target_classes=z.get("object_classes", ["person", "car", "truck", "motorcycle"])
-                ))
-    else:
-        # Fallback rule for testing
-        sample_polygon = [{"x": 100.0, "y": 100.0}, {"x": 500.0, "y": 100.0}, {"x": 500.0, "y": 400.0}, {"x": 100.0, "y": 400.0}]
-        rule_engine.add_rule(RestrictedZoneRule(rule_id="RULE-001", zone_id="ZONE-001", polygon=sample_polygon, trigger_on="ENTER"))
-
-    # Dynamically fetch fences
     fences = await ConfigService.get_fences(camera_id)
-    if fences:
-        for f in fences:
-            line = f.get("line", [])
-            if len(line) == 2:
-                rule_engine.add_rule(VirtualFenceRule(
-                    rule_id=str(f.get("_id", f.get("fence_id", "UNKNOWN"))),
-                    zone_id=f.get("fence_id", "UNKNOWN"),
-                    line=line,
-                    trigger_on="CROSS",
-                    target_classes=f.get("object_classes", ["person", "car", "truck", "motorcycle"])
-                ))
+    
+    # Internal token for AI service to authenticate to POST /api/detections
+    internal_token = create_access_token(data={"sub": "system_ai_service", "role": "admin"})
 
     try:
         success = await run_in_threadpool(video_service.open)
@@ -94,11 +67,43 @@ async def generate_annotated_frames(camera_id: str):
             enhanced = await run_in_threadpool(enhance_low_light, frame)
             result = await run_in_threadpool(detector.detect, enhanced, frame_number=frame_count)
             tracks = await run_in_threadpool(tracker.update, result)
-            alerts = await run_in_threadpool(rule_engine.evaluate, tracks)
             
-            for alert in alerts:
-                event = await run_in_threadpool(event_service.create_event_from_alert, alert, enhanced)
-                await event_service.save_event_to_db(event)
+            # Post to Backend (Decoupled Architecture)
+            ret, buffer = await run_in_threadpool(cv2.imencode, '.jpg', enhanced)
+            if ret and len(tracks) > 0:
+                frame_bytes = buffer.tobytes()
+                
+                tracked_detections = []
+                for t in tracks:
+                    tracked_detections.append(TrackedDetection(
+                        track_id=t["track_id"],
+                        class_name=t["class_name"],
+                        confidence=t["confidence"],
+                        bbox={"x1": t["bbox"]["x1"], "y1": t["bbox"]["y1"], "x2": t["bbox"]["x2"], "y2": t["bbox"]["y2"]},
+                        centroid={"x": t["centroid"]["x"], "y": t["centroid"]["y"]},
+                        previous_centroid={"x": t.get("previous_centroid", {}).get("x", 0), "y": t.get("previous_centroid", {}).get("y", 0)} if t.get("previous_centroid") else None,
+                        active=t["active"],
+                        movement_state=t["movement_state"],
+                        direction=t["direction"]
+                    ))
+                
+                payload = DetectionPayload(
+                    camera_id=camera_id,
+                    timestamp=time.time(),
+                    frame_number=frame_count,
+                    tracks=tracked_detections
+                )
+                
+                async with httpx.AsyncClient(base_url="http://127.0.0.1:8000") as client:
+                    try:
+                        await client.post(
+                            "/api/detections/",
+                            headers={"Authorization": f"Bearer {internal_token}"},
+                            data={"payload": payload.model_dump_json()},
+                            files={"frame": ("frame.jpg", frame_bytes, "image/jpeg")}
+                        )
+                    except Exception as e:
+                        print(f"Error posting to detections API: {e}")
             
             # Annotate tracking
             for track in tracks:
@@ -108,25 +113,37 @@ async def generate_annotated_frames(camera_id: str):
                 cv2.rectangle(enhanced, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(enhanced, label, (x1, max(y1 - 10, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
             
-            # Annotate rules from rule engine directly
-            for rule in rule_engine.rules:
-                if isinstance(rule, RestrictedZoneRule):
-                    poly = rule.polygon
-                    for i in range(len(poly)):
-                        p1 = poly[i]
-                        p2 = poly[(i + 1) % len(poly)]
-                        cv2.line(enhanced, (int(p1["x"]), int(p1["y"])), (int(p2["x"]), int(p2["y"])), (0, 0, 255), 2)
-                elif isinstance(rule, VirtualFenceRule):
-                    line = rule.line
+            # Annotate rules directly from config
+            if zones:
+                for z in zones:
+                    poly = z.get("polygon", [])
+                    if len(poly) >= 3:
+                        for i in range(len(poly)):
+                            p1 = poly[i]
+                            p2 = poly[(i + 1) % len(poly)]
+                            cv2.line(enhanced, (int(p1["x"]), int(p1["y"])), (int(p2["x"]), int(p2["y"])), (0, 0, 255), 2)
+            else:
+                # Fallback for testing
+                sample_polygon = [{"x": 100.0, "y": 100.0}, {"x": 500.0, "y": 100.0}, {"x": 500.0, "y": 400.0}, {"x": 100.0, "y": 400.0}]
+                for i in range(len(sample_polygon)):
+                    p1 = sample_polygon[i]
+                    p2 = sample_polygon[(i + 1) % len(sample_polygon)]
+                    cv2.line(enhanced, (int(p1["x"]), int(p1["y"])), (int(p2["x"]), int(p2["y"])), (0, 0, 255), 2)
+
+            if fences:
+                for f in fences:
+                    line = f.get("line", [])
                     if len(line) == 2:
                         p1, p2 = line[0], line[1]
                         cv2.line(enhanced, (int(p1["x"]), int(p1["y"])), (int(p2["x"]), int(p2["y"])), (255, 0, 0), 2)
             
-            ret, buffer = await run_in_threadpool(cv2.imencode, '.jpg', enhanced)
-            if not ret:
-                continue
-                
-            frame_bytes = buffer.tobytes()
+            if ret:
+                frame_bytes = buffer.tobytes()
+            else:
+                ret, buffer = await run_in_threadpool(cv2.imencode, '.jpg', enhanced)
+                if not ret:
+                    continue
+                frame_bytes = buffer.tobytes()
             yield (b"--frame\r\n"
                    b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n")
     finally:
