@@ -1,4 +1,5 @@
 import pytest
+import json
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock, AsyncMock
 
@@ -40,7 +41,7 @@ def test_submit_detections_success(mock_save_event, mock_list_zones, mock_get_ca
     mock_get_camera.return_value = {"camera_id": "CAM-01", "status": "active"}
     mock_list_zones.return_value = ([], 0) # No zones -> No events generated
     
-    response = client.post("/api/detections/", json=valid_payload)
+    response = client.post("/api/detections/", data={"payload": json.dumps(valid_payload)})
     
     assert response.status_code == 201
     data = response.json()
@@ -52,7 +53,7 @@ def test_submit_detections_success(mock_save_event, mock_list_zones, mock_get_ca
 def test_submit_detections_invalid_camera(mock_get_camera, mock_db_conn):
     mock_get_camera.return_value = None
     
-    response = client.post("/api/detections/", json=valid_payload)
+    response = client.post("/api/detections/", data={"payload": json.dumps(valid_payload)})
     
     assert response.status_code == 400
     assert "Unknown camera_id" in response.json()["detail"]
@@ -62,12 +63,13 @@ def test_submit_detections_invalid_camera(mock_get_camera, mock_db_conn):
 def test_submit_detections_inactive_camera(mock_get_camera, mock_db_conn):
     mock_get_camera.return_value = {"camera_id": "CAM-01", "status": "inactive"}
     
-    response = client.post("/api/detections/", json=valid_payload)
+    response = client.post("/api/detections/", data={"payload": json.dumps(valid_payload)})
     
     assert response.status_code == 400
     assert "is not active" in response.json()["detail"]
 
-def test_submit_detections_invalid_payload():
+@patch("app.routes.detections.is_db_connected", return_value=True)
+def test_submit_detections_invalid_payload(mock_db_conn):
     invalid_payload = {
         "camera_id": "CAM-01",
         "timestamp": 1695029300.0,
@@ -83,11 +85,11 @@ def test_submit_detections_invalid_payload():
         ]
     }
     
-    response = client.post("/api/detections/", json=invalid_payload)
+    response = client.post("/api/detections/", data={"payload": json.dumps(invalid_payload)})
     assert response.status_code == 422 # Validation error
 
 def test_rbac_viewer_cannot_submit():
     app.dependency_overrides[get_current_user] = lambda: {"email": "viewer@test.com", "role": "viewer"}
     
-    response = client.post("/api/detections/", json=valid_payload)
+    response = client.post("/api/detections/", data={"payload": json.dumps(valid_payload)})
     assert response.status_code == 403

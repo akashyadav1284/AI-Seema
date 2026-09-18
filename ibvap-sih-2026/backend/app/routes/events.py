@@ -11,9 +11,6 @@ router = APIRouter(tags=["Events"])
 
 ALLOWED_STATUSES = ["PENDING_REVIEW", "VERIFIED", "FALSE_ALERT", "UNDER_INVESTIGATION"]
 
-# In-memory fallback if MongoDB is not connected
-fallback_events = []
-
 @router.get("/", response_model=PaginatedEventResponse)
 async def get_events(
     camera_id: Optional[str] = None,
@@ -28,27 +25,7 @@ async def get_events(
     current_user: dict = Depends(RoleChecker(["admin", "operator", "viewer"]))
 ):
     if not is_db_connected():
-        # Use fallback events
-        filtered_events = fallback_events
-        if camera_id:
-            filtered_events = [e for e in filtered_events if e.get("camera_id") == camera_id]
-        if event_type:
-            filtered_events = [e for e in filtered_events if e.get("event_type") == event_type]
-        if severity:
-            filtered_events = [e for e in filtered_events if e.get("severity") == severity]
-        if review_status:
-            filtered_events = [e for e in filtered_events if e.get("status") == review_status]
-        
-        # Sort and paginate
-        filtered_events = sorted(filtered_events, key=lambda x: x.get("timestamp", 0), reverse=True)
-        items = filtered_events[skip : skip + limit]
-        
-        return PaginatedEventResponse(
-            items=[SecurityEvent(**item) for item in items],
-            total=len(filtered_events),
-            skip=skip,
-            limit=limit
-        )
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Database not available")
         
     db = get_db()
     

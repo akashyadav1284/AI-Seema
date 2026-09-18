@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from contextlib import asynccontextmanager
-import socketio
+
 
 from app.config import settings
 from app.database import connect_to_mongo, close_mongo_connection
@@ -10,51 +10,16 @@ from app.utils.logger import logger
 from app.routes import health, cameras, events, zones, evidence, auth, detections, ws, alerts, analytics
 from app.services.stream_service import generate_annotated_frames
 
-# Create Socket.IO server
-sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
 
-@sio.event
-async def connect(sid, environ):
-    logger.info(f"Socket.IO client connected: {sid}")
-
-@sio.event
-async def disconnect(sid):
-    logger.info(f"Socket.IO client disconnected: {sid}")
-
-import asyncio
-import time
-
-# Queue to receive real events from stream_service
-cv_event_queue = asyncio.Queue()
-
-async def real_event_broadcaster():
-    logger.info("Starting real AI/CV event broadcaster loop")
-    while True:
-        try:
-            message_type, payload = await cv_event_queue.get()
-            if message_type == "new_alert":
-                await sio.emit('new_alert', payload)
-            elif message_type == "tracks_update":
-                await sio.emit('tracks_update', payload)
-            elif message_type == "stats_update":
-                await sio.emit('stats_update', payload)
-        except Exception as e:
-            logger.error(f"Error broadcasting event: {e}")
-        finally:
-            cv_event_queue.task_done()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting IBVAP Backend")
     await connect_to_mongo()
-    global background_task
-    background_task = asyncio.create_task(mock_realtime_data_loop())
     yield
     # Shutdown
     logger.info("Shutting down IBVAP Backend")
-    if background_task:
-        background_task.cancel()
     await close_mongo_connection()
 
 app = FastAPI(
@@ -115,6 +80,3 @@ async def stream(camera_id: str):
         media_type="multipart/x-mixed-replace; boundary=frame"
     )
 
-# Mount Socket.IO app
-socket_app = socketio.ASGIApp(sio, other_asgi_app=app)
-app = socket_app  # Override app to serve Socket.IO

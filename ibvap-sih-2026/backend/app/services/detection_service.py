@@ -1,5 +1,7 @@
 import logging
-from typing import Dict, Any, List
+import cv2
+import numpy as np
+from typing import Dict, Any, List, Optional
 from app.models.detection import DetectionPayload
 from app.services.rule_engine import RuleEngine, VirtualFenceRule, RestrictedZoneRule, LoiteringRule, WrongDirectionRule, CrowdRule
 from app.services.event_service import EventService
@@ -55,7 +57,7 @@ class DetectionService:
             except Exception as e:
                 logger.error(f"Failed to load rule for zone {z_id}: {e}")
 
-    async def process_payload(self, payload: DetectionPayload) -> Dict[str, Any]:
+    async def process_payload(self, payload: DetectionPayload, frame_bytes: Optional[bytes] = None) -> Dict[str, Any]:
         # 1. Validate camera
         camera = await camera_service.get_camera_by_id(payload.camera_id)
         if not camera:
@@ -63,6 +65,12 @@ class DetectionService:
             
         if camera.get("status") != "active":
             raise ValueError(f"Camera {payload.camera_id} is not active.")
+
+        # Decode image if present
+        frame = None
+        if frame_bytes:
+            nparr = np.frombuffer(frame_bytes, np.uint8)
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
         # 2. Get stateful RuleEngine
         engine = await self.get_or_build_rule_engine(payload.camera_id)
@@ -83,7 +91,7 @@ class DetectionService:
             # Pass custom timestamp from payload if rule engine overrides
             alert["timestamp"] = payload.timestamp
             
-            event = self.event_service.create_event_from_alert(alert, frame=None)
+            event = self.event_service.create_event_from_alert(alert, frame=frame)
             success = await self.event_service.save_event_to_db(event)
             if success:
                 generated_event_ids.append(event.event_id)

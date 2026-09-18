@@ -22,7 +22,7 @@ async def connect_to_mongo():
             database = get_db()
             await database["users"].create_index("email", unique=True)
             await database["events"].create_index("event_id", unique=True)
-            await database["events"].create_index("timestamp", direction=-1)
+            await database["events"].create_index([("timestamp", -1)])
             await database["events"].create_index([("camera_id", 1), ("timestamp", -1)])
             await database["events"].create_index([("status", 1), ("timestamp", -1)])
             await database["cameras"].create_index("camera_id", unique=True)

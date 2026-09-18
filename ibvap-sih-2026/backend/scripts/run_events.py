@@ -4,6 +4,7 @@ import cv2
 import json
 import sys
 import os
+import warnings
 from pathlib import Path
 
 # Add the backend root to the path so app can be imported
@@ -16,6 +17,8 @@ from app.services.rule_engine import RuleEngine, VirtualFenceRule, RestrictedZon
 from app.services.event_service import EventService
 from app.utils.annotation import Annotator
 from app.database import connect_to_mongo, close_mongo_connection
+
+warnings.warn("run_events.py is DEPRECATED. Use run_integration.py to stream detections to the FastAPI backend instead.", DeprecationWarning)
 
 async def main():
     parser = argparse.ArgumentParser(description="IBVAP Phase 5 Part 1 CLI Event Storage Runner")
