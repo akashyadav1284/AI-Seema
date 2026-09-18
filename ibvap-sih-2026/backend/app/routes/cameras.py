@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Query, status
 from typing import Optional
+from app.database import get_db, is_db_connected
 
 from app.models.camera import CameraCreate, CameraUpdate, CameraResponse, PaginatedCameraResponse
 from app.services.auth import RoleChecker

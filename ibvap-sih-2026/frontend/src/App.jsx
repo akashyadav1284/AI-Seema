@@ -3,9 +3,13 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import LiveMonitoring from './pages/LiveMonitoring';
 import Cameras from './pages/Cameras';
+import Alerts from './pages/Alerts';
 import Events from './pages/Events';
 import Analytics from './pages/Analytics';
 import SystemHealth from './pages/SystemHealth';
+import Zones from './pages/Zones';
+import Tracks from './pages/Tracks';
+import Evidence from './pages/Evidence';
 
 // Placeholder components for new routes to ensure routing works
 const PlaceholderPage = ({ title }) => (
@@ -23,12 +27,15 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/live" element={<LiveMonitoring />} />
           <Route path="/cameras" element={<Cameras />} />
-          <Route path="/alerts" element={<PlaceholderPage title="Real-time Alerts" />} />
+          <Route path="/alerts" element={<Alerts />} />
           <Route path="/events" element={<Events />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/reports" element={<PlaceholderPage title="Automated Reports" />} />
           <Route path="/health" element={<SystemHealth />} />
           <Route path="/settings" element={<PlaceholderPage title="System Settings" />} />
+          <Route path="/zones" element={<Zones />} />
+          <Route path="/tracks" element={<Tracks />} />
+          <Route path="/evidence" element={<Evidence />} />
         </Routes>
       </Layout>
     </BrowserRouter>

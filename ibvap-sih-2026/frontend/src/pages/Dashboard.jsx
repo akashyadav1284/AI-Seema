@@ -3,7 +3,7 @@ import { getCameras, getEvents } from '../services/api';
 import { socket, connectSocket, disconnectSocket } from '../services/socket';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { Camera, AlertTriangle, ShieldCheck, Activity, Target } from 'lucide-react';
+import { Camera, AlertTriangle, ShieldCheck, Activity, Target, Crosshair, Eye } from 'lucide-react';
 import AnimatedMap from '../components/ui/AnimatedMap';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -25,7 +25,9 @@ const Dashboard = () => {
     totalCameras: 0,
     onlineCameras: 0,
     activeAlerts: 0,
-    eventsToday: 0
+    eventsToday: 0,
+    liveDetections: 0,
+    trackedObjects: 0
   });
 
   const [cameras, setCameras] = useState([]);
@@ -104,27 +106,27 @@ const Dashboard = () => {
         <motion.div variants={itemVariants} className="lg:col-span-3 flex flex-col gap-6 min-h-0">
           
           {/* Top KPIs above map */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 shrink-0">
             <Card className="glass-panel hover:bg-surfaceHover transition-colors">
               <CardContent className="p-4 flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-medium text-slate-400 uppercase">Camera Network</p>
-                  <p className="text-3xl font-light text-slate-100 mt-1">{stats.onlineCameras} <span className="text-sm text-slate-500">/ {stats.totalCameras}</span></p>
+                  <p className="text-[10px] font-medium text-slate-400 uppercase">Cameras</p>
+                  <p className="text-2xl font-light text-slate-100 mt-1">{stats.onlineCameras} <span className="text-xs text-slate-500">/{stats.totalCameras}</span></p>
                 </div>
-                <div className="p-3 bg-primary/20 rounded-full">
-                  <Camera className="w-6 h-6 text-primary" />
+                <div className="p-2 bg-primary/20 rounded-full">
+                  <Camera className="w-5 h-5 text-primary" />
                 </div>
               </CardContent>
             </Card>
-            
-            <Card className="glass-panel border-danger/30 shadow-[0_0_15px_rgba(239,68,68,0.1)] hover:bg-surfaceHover transition-colors">
+
+            <Card className="glass-panel border-info/30 hover:bg-surfaceHover transition-colors">
               <CardContent className="p-4 flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-medium text-danger uppercase">Active Incidents</p>
-                  <p className="text-3xl font-light text-danger mt-1">{stats.activeAlerts}</p>
+                  <p className="text-[10px] font-medium text-info uppercase">Live Detections</p>
+                  <p className="text-2xl font-light text-info mt-1">{stats.liveDetections}</p>
                 </div>
-                <div className="p-3 bg-danger/20 rounded-full">
-                  <AlertTriangle className="w-6 h-6 text-danger" />
+                <div className="p-2 bg-info/20 rounded-full">
+                  <Eye className="w-5 h-5 text-info" />
                 </div>
               </CardContent>
             </Card>
@@ -132,11 +134,35 @@ const Dashboard = () => {
             <Card className="glass-panel hover:bg-surfaceHover transition-colors">
               <CardContent className="p-4 flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-medium text-slate-400 uppercase">Total Events (24h)</p>
-                  <p className="text-3xl font-light text-slate-100 mt-1">{stats.eventsToday}</p>
+                  <p className="text-[10px] font-medium text-slate-300 uppercase">Tracked Objects</p>
+                  <p className="text-2xl font-light text-slate-100 mt-1">{stats.trackedObjects}</p>
                 </div>
-                <div className="p-3 bg-warning/20 rounded-full">
-                  <Activity className="w-6 h-6 text-warning" />
+                <div className="p-2 bg-slate-700 rounded-full">
+                  <Crosshair className="w-5 h-5 text-slate-300" />
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="glass-panel border-danger/30 shadow-[0_0_15px_rgba(239,68,68,0.1)] hover:bg-surfaceHover transition-colors">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-medium text-danger uppercase">Active Incidents</p>
+                  <p className="text-2xl font-light text-danger mt-1">{stats.activeAlerts}</p>
+                </div>
+                <div className="p-2 bg-danger/20 rounded-full">
+                  <AlertTriangle className="w-5 h-5 text-danger" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="glass-panel hover:bg-surfaceHover transition-colors">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-medium text-slate-400 uppercase">Events (24h)</p>
+                  <p className="text-2xl font-light text-slate-100 mt-1">{stats.eventsToday}</p>
+                </div>
+                <div className="p-2 bg-warning/20 rounded-full">
+                  <Activity className="w-5 h-5 text-warning" />
                 </div>
               </CardContent>
             </Card>
@@ -144,11 +170,11 @@ const Dashboard = () => {
             <Card className="glass-panel border-success/30 hover:bg-surfaceHover transition-colors">
               <CardContent className="p-4 flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-medium text-success uppercase">System Status</p>
-                  <p className="text-xl font-bold text-success mt-1 tracking-wider uppercase">Online</p>
+                  <p className="text-[10px] font-medium text-success uppercase">System</p>
+                  <p className="text-lg font-bold text-success mt-1 tracking-wider uppercase">Online</p>
                 </div>
-                <div className="p-3 bg-success/20 rounded-full">
-                  <ShieldCheck className="w-6 h-6 text-success" />
+                <div className="p-2 bg-success/20 rounded-full">
+                  <ShieldCheck className="w-5 h-5 text-success" />
                 </div>
               </CardContent>
             </Card>

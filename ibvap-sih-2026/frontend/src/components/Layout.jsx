@@ -16,7 +16,10 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  ShieldCheck
+  ShieldCheck,
+  Map,
+  Crosshair,
+  Database
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Badge } from './ui/Badge';
@@ -25,8 +28,11 @@ const navItems = [
   { to: "/", label: "Overview", icon: LayoutDashboard },
   { to: "/live", label: "Live Monitoring", icon: MonitorPlay },
   { to: "/cameras", label: "Cameras", icon: Camera },
+  { to: "/tracks", label: "Live Tracks", icon: Crosshair },
+  { to: "/zones", label: "Zones & Fences", icon: Map },
   { to: "/alerts", label: "Alerts", icon: Bell, badge: 3 }, // Example badge
   { to: "/events", label: "Events", icon: History },
+  { to: "/evidence", label: "Evidence Vault", icon: Database },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/reports", label: "Reports", icon: FileText },
   { to: "/health", label: "System Health", icon: Activity },

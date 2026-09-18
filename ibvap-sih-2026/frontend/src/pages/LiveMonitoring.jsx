@@ -21,7 +21,7 @@ const LiveMonitoring = () => {
         const camList = res.data || [];
         setCameras(camList);
         if (camList.length > 0) {
-          setActiveCameraId(camList[0].id);
+          setActiveCameraId(camList[0].camera_id || camList[0].id);
         }
       } catch (err) {
         console.error("Failed to load cameras for live view", err);
@@ -41,7 +41,7 @@ const LiveMonitoring = () => {
   };
 
   const visibleCameras = viewMode === 'single' 
-    ? cameras.filter(c => c.id === activeCameraId)
+    ? cameras.filter(c => (c.camera_id || c.id) === activeCameraId)
     : cameras.slice(0, viewMode === 'grid' ? 4 : 9);
 
   return (
@@ -60,7 +60,7 @@ const LiveMonitoring = () => {
               onChange={(e) => setActiveCameraId(e.target.value)}
             >
               {cameras.map(cam => (
-                <option key={cam.id} value={cam.id}>{cam.name}</option>
+                <option key={cam.camera_id || cam.id} value={cam.camera_id || cam.id}>{cam.name}</option>
               ))}
             </select>
           )}
@@ -103,9 +103,9 @@ const LiveMonitoring = () => {
           <div className={cn("grid gap-4 h-full auto-rows-fr", getGridClass())}>
             {visibleCameras.map((cam) => (
               <VideoPlayer 
-                key={cam.id}
-                src={`${API_BASE}/stream/${cam.id}`} 
-                cameraName={`${cam.name} (${cam.location})`}
+                key={cam.camera_id || cam.id}
+                src={`${API_BASE}/stream/${cam.camera_id || cam.id}`} 
+                cameraName={`${cam.name} (${cam.location || 'Local'})`}
                 capabilities={cam.capabilities || ['YOLOv8', 'Tracking']}
                 className="w-full h-full min-h-[300px]"
               />

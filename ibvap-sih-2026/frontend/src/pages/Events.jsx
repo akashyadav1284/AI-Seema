@@ -100,17 +100,18 @@ const Events = () => {
                   <TableHead>Event Type</TableHead>
                   <TableHead>Severity</TableHead>
                   <TableHead>Camera Source</TableHead>
+                  <TableHead>Track/Zone</TableHead>
                   <TableHead>Details</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
+                  <TableHead className="text-right">Evidence</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredEvents.map((evt) => (
-                  <TableRow key={evt.id}>
+                  <TableRow key={evt.id || evt._id}>
                     <TableCell className="font-mono text-sm text-slate-400">
                       {new Date(evt.timestamp || Date.now()).toLocaleString()}
                     </TableCell>
-                    <TableCell className="font-medium text-slate-200">
+                    <TableCell className="font-medium text-slate-200 uppercase text-xs tracking-wider">
                       {evt.type}
                     </TableCell>
                     <TableCell>
@@ -121,13 +122,24 @@ const Events = () => {
                     <TableCell className="text-slate-300">
                       {evt.camera_name || 'N/A'}
                     </TableCell>
-                    <TableCell className="text-slate-400 max-w-xs truncate">
-                      {evt.description || 'No additional details provided.'}
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        {evt.track_id && <span className="text-xs text-slate-400 font-mono">ID: #{evt.track_id}</span>}
+                        {evt.zone_id && <Badge variant="warning" className="text-[10px] w-fit px-1.5 py-0 bg-warning/20 text-warning border-warning/30">{evt.zone_id}</Badge>}
+                        {!evt.track_id && !evt.zone_id && <span className="text-slate-600 text-xs">-</span>}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-slate-400 max-w-xs truncate text-sm">
+                      {evt.description || evt.reason || 'No additional details provided.'}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" className="text-primary hover:text-primary hover:bg-primary/10">
-                        Investigate
-                      </Button>
+                      {evt.evidence ? (
+                        <Button variant="ghost" className="text-primary hover:text-primary hover:bg-primary/10" onClick={() => window.location.href = '/evidence'}>
+                          View Evidence
+                        </Button>
+                      ) : (
+                        <span className="text-slate-600 text-xs pr-4">-</span>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
