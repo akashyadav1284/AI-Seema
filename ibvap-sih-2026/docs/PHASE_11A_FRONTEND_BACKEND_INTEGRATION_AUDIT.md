@@ -1,78 +1,84 @@
-# PHASE 11A Frontend-Backend Integration Audit
+# PHASE 11A FRONTEND-BACKEND INTEGRATION AUDIT
 
 ## A. Current Frontend Architecture
-- Built with React, Vite, and Tailwind CSS using a dark, high-tech theme.
-- Navigation handled by React Router (via `App.jsx` and `Layout.jsx`).
-- State managed primarily via local `useState` and `useEffect` hooks.
-- Direct API calls handled centrally in `src/services/api.js`.
-- Real-time updates via Socket.IO configured in `src/services/socket.js`.
-- No global authentication state manager or JWT storage exists in the frontend.
+- **Tech Stack:** React (Vite), TailwindCSS, Framer Motion, Recharts.
+- **Routing:** Simple, unprotected client-side routing via `react-router-dom`.
+- **State Management:** Local component state (`useState`, `useEffect`).
+- **Real-time:** Uses `socket.io-client` for real-time dashboard updates.
+- **Current Status:** A highly aesthetic UI shell exists with mocked behavior.
 
 ## B. Current Backend API Architecture
-- Built with FastAPI with a MongoDB data store.
-- Robust Role-Based Access Control (RBAC) via `RoleChecker` (requires valid JWT tokens).
-- API routes are logically separated (e.g., `cameras.py`, `events.py`, `alerts.py`, `zones.py`).
-- Responses are strongly typed and paginated via Pydantic models (e.g., `PaginatedCameraResponse`).
-- Evidence endpoints protect snapshots via auth mechanisms to prevent unauthorized access.
+- **Tech Stack:** FastAPI, Motor (MongoDB async), PyJWT.
+- **Security:** Strict RBAC; every endpoint (except `/health` and `/auth/login`) requires a valid JWT `Authorization: Bearer` token.
+- **Real-time:** Uses native Python `fastapi.WebSocket` (Standard WS protocol, HTTP/1.1 Upgrade).
+- **Pagination:** Uses a standardized paginated response model (`items`, `total`, `skip`, `limit`).
 
 ## C. Existing Integrations
-- The frontend attempts to make network calls to the correct API base URL for `cameras`, `events`, and `zones`.
-- `socket.js` connects to the same base URL for WebSocket events.
-- UI expects real-time streams like `new_alert` and `tracks_update`.
+- Frontend `api.js` exports basic fetch wrappers for `/api/health`, `/api/cameras/`, `/api/events/`, and `/api/zones/`.
+- Configurable base URL via `import.meta.env.VITE_API_BASE_URL`.
 
 ## D. Missing Integrations
-- **Authentication**: No login UI, token persistence (localStorage/cookies), or HTTP interceptors to attach `Authorization: Bearer <token>` to requests.
-- **WebSocket Auth**: `socket.js` connects anonymously without passing authentication tokens, which will be rejected by the backend if it enforces auth on the socket connection.
-- **Analytics/Dashboard**: The dashboard currently lacks connections to real endpoints like `/api/analytics/summary` or `/api/analytics/events/trends`. It seems to rely on some placeholder socket events or lacks robust HTTP fetching for historical analytics.
-- **Evidence**: Evidence URLs (like snapshots) are not appending auth headers or tokens, meaning image requests to protected endpoints will fail with a 401 Unauthorized.
+1. **Authentication:** No Login page, no JWT storage, no protected routing.
+2. **Alerts & Actions:** `/api/alerts` is entirely missing from `api.js`. No UI to acknowledge/resolve alerts.
+3. **Evidence Fetching:** No code exists to securely fetch images from `/api/evidence/snapshots/{filename}`.
+4. **Live Streams:** UI attempts to load `${API_BASE}/stream/${cam.id}` which does not exist on the backend.
+5. **Analytics:** Frontend has a beautiful UI but uses `Math.random()` to generate dummy charts instead of calling the backend's extensive analytics APIs.
 
 ## E. API Contract Mismatches
-- **Pagination Structure**: The backend routes (e.g., `GET /api/cameras/`) return a `PaginatedCameraResponse` schema which holds the array in `.items`. The frontend in some places expects the array directly, or at `data.data`, or relies on `data.items || data.data`. While this fallback exists in `Cameras.jsx` (`setCameras(data.data || [])`), it will evaluate to `[]` because the backend actually returns the list in `.items`, meaning no cameras will render.
-- **Event Schemas**: Mismatches between frontend expectations (`evt.type`, `evt.camera_name`) and backend Pydantic models (e.g., `event_type`, `camera_id` vs `camera_name`).
+There are several severe schema mismatches that will crash the UI:
+1. **Pagination Wrapping:** Frontend expects `const data = await getCameras(); setCameras(data.data);`. Backend returns `{"items": [...], "total": X}`. It should be `data.items`.
+2. **Camera Schema:** Frontend uses `cam.id` and `cam.capabilities`. Backend provides `camera.camera_id` and has no `capabilities` field.
+3. **Event Schema:** Frontend uses `evt.id`, `evt.type`, `evt.camera_name`, `evt.description`. Backend provides `event.event_id`, `event.event_type`, `event.camera_id`, `event.reason`.
 
 ## F. WebSocket Integration Status
-- Connection exists in `socket.js` using `socket.io-client`.
-- Frontend subscribes to `new_alert` globally.
-- **Issues**: Lacks JWT authentication during handshake. Lacks dynamic subscription to specific `camera:<camera_id>` rooms, receiving firehose data instead.
+🔴 **CRITICAL INCOMPATIBILITY**
+- **Protocol Mismatch:** The frontend uses `socket.io-client`. The backend uses standard native WebSockets (`fastapi.WebSocket`). Socket.io uses a proprietary protocol on top of WebSockets. They cannot talk to each other.
+- **Auth Mismatch:** The backend requires `ws://localhost:8000/?token=<JWT>`. The frontend currently initiates connection without any auth tokens.
+- **Message Format:** Frontend expects `socket.on('new_alert', ...)`. Backend sends raw JSON text frames: `await websocket.send_json({"type": "new_alert", ...})`.
 
 ## G. Authentication Integration Status
-- **Status: 0%**.
-- The backend fully guards its APIs with `Depends(RoleChecker([...]))`.
-- The frontend has no mechanism to acquire, store, or transmit JWTs. Consequently, every API call from the frontend currently results in a `401 Unauthorized`.
+🔴 **MISSING**
+- No login UI exists.
+- `fetch` wrappers in `api.js` do not attach the `Authorization: Bearer <token>` header.
+- Because the backend is strictly secured, **every single API call the frontend makes currently results in a `401 Unauthorized`**.
 
 ## H. Evidence Integration Status
-- Frontend displays evidence via a gallery (`Evidence.jsx`), expecting an image source URL.
-- Since evidence snapshots are protected backend routes, rendering `<img src="/api/evidence/snapshots/..." />` directly in HTML will fail because the browser does not attach JWT headers to standard `<img>` tags.
+🔴 **MISSING**
+- The frontend `Dashboard.jsx` and `Events.jsx` do not render the snapshot images.
+- Fetching evidence requires JWT injection into the image fetch request, which is complex (cannot just use `<img src="..."/>`).
 
 ## I. Analytics Integration Status
-- Backend exposes comprehensive `/api/analytics/...` endpoints.
-- Frontend lacks API calls to these specific endpoints, relying heavily on hardcoded or socket-based stats.
+🔴 **MOCKED**
+- `Analytics.jsx` is completely fabricated using `Math.random()`. It needs to be wired to:
+  - `/api/analytics/summary`
+  - `/api/analytics/events`
+  - `/api/analytics/events/trends`
+  - `/api/analytics/alerts`
 
 ## J. Security Issues
-- If JWTs are added, they must be stored securely (preferably HTTP-only cookies, or at least secure memory/localStorage with XSS protections).
-- Evidence API vulnerability if left unprotected or if accessed via URL query parameters without short-lived tokens.
-- Hardcoded fallback API URLs (`http://localhost:8000`) instead of relying purely on environment configs in production.
+- **Unprotected Routes:** All UI routes are accessible without logging in.
+- **WebSocket Vulnerability:** Currently attempting to connect to WebSockets without auth.
 
-## K. Exact Files that need modification
-1. **Frontend**:
-   - `frontend/src/services/api.js` (Add interceptors to inject JWT).
-   - `frontend/src/services/socket.js` (Add auth payload to connection).
-   - `frontend/src/App.jsx` (Add authentication routing and context provider).
-   - `frontend/src/pages/Cameras.jsx`, `Events.jsx`, `Zones.jsx` (Fix `.items` vs `.data` mismatches).
-   - `frontend/src/pages/Evidence.jsx` (Implement secure image fetching with auth).
-2. **Backend**:
-   - No major rewrites needed, but `socket_app` initialization needs fixing (it currently breaks tests with `AttributeError: 'ASGIApp'`).
+## K. Exact Files That Need Modification
+1. **Frontend Core:**
+   - `frontend/src/App.jsx` (Add AuthProvider, Login route, ProtectedRoutes).
+   - `frontend/src/services/api.js` (Add token management, interceptors, missing routes).
+   - `frontend/src/services/socket.js` (Replace `socket.io-client` with native `WebSocket` API).
+2. **Frontend Pages:**
+   - `frontend/src/pages/Cameras.jsx` (Schema mapping).
+   - `frontend/src/pages/Events.jsx` (Schema mapping).
+   - `frontend/src/pages/Dashboard.jsx` (Schema mapping, stats updates).
+   - `frontend/src/pages/Analytics.jsx` (Wire real backend API).
+   - `frontend/src/pages/LiveMonitoring.jsx` (Decide how to handle missing `/stream` route).
 
 ## L. Recommended Implementation Order
-1. Implement Frontend Authentication (Login UI, `AuthContext`, Token Storage).
-2. Update `api.js` with a fetch interceptor to append the `Authorization` header to all requests.
-3. Fix API contract mismatches (`items` vs `data`) across all frontend pages.
-4. Secure the WebSocket connection by passing the token during the handshake in `socket.js`.
-5. Implement a secure mechanism for fetching Evidence images (e.g., fetch blob with headers, then create object URL).
-6. Connect the Dashboard to the new Analytics endpoints.
+1. **Authentication:** Create Login page, JWT storage, and update `api.js` to inject `Bearer` tokens.
+2. **Schema Alignment:** Fix `Cameras.jsx`, `Events.jsx`, and `Dashboard.jsx` to correctly parse `items` and standard fields (`camera_id`, `event_type`).
+3. **WebSocket Rewrite:** Strip `socket.io-client` and implement native `WebSocket` with `?token=` authentication.
+4. **Analytics & Evidence:** Wire up the real Analytics APIs and implement a secure image-fetching component for Evidence.
 
 ## M. Blockers, if any
-- The total absence of frontend authentication means that **no data can currently be fetched or displayed**.
-- Backend tests are currently failing due to the ASGIApp SocketIO wrapping logic breaking standard TestClient executions, and `RoleChecker` enforcing auth in tests without tokens being passed.
+**BLOCKED:** The frontend cannot render any data because it lacks JWT authentication headers, resulting in global `401 Unauthorized` errors. Furthermore, the WebSocket layers are fundamentally incompatible (`socket.io` vs native `WebSocket`).
 
+---
 * BLOCKED — FIX REQUIRED BEFORE PHASE 11B

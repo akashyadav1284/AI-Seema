@@ -42,14 +42,21 @@ async def get_event_analytics(
 
 @router.get("/events/trends", response_model=TrendResponse)
 async def get_event_trends(
-    start_time: float = Query(..., description="Start timestamp in seconds"),
-    end_time: float = Query(..., description="End timestamp in seconds"),
+    start_time: Optional[float] = Query(None, description="Start timestamp in seconds"),
+    end_time: Optional[float] = Query(None, description="End timestamp in seconds"),
     interval: str = Query("day", regex="^(hour|day|week)$", description="Grouping interval (hour, day, week)"),
     current_user: dict = Depends(role_checker)
 ):
     """Get event counts grouped by a time interval (trends)."""
     if not is_db_connected():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Database not connected")
+        
+    import time
+    now = time.time()
+    if end_time is None:
+        end_time = now
+    if start_time is None:
+        start_time = now - 86400  # Default to last 24 hours
         
     if start_time > end_time:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="start_time cannot be greater than end_time")

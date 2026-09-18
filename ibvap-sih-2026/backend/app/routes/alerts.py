@@ -45,7 +45,7 @@ async def get_alert(
         
     return alert
 
-@router.patch("/{alert_id}/acknowledge", response_model=SecurityAlert)
+@router.post("/{alert_id}/acknowledge", response_model=SecurityAlert)
 async def acknowledge_alert(
     alert_id: str,
     current_user: dict = Depends(RoleChecker(["admin", "operator"]))

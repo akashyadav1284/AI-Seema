@@ -24,7 +24,7 @@ async def get_ws_current_user(token: str):
         return None
         
     db = get_db()
-    if not db:
+    if db is None:
         return None
         
     user = await db["users"].find_one({"email": email})
