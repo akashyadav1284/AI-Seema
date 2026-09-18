@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getCameras, getEvents } from '../services/api';
-import { socket, connectSocket, disconnectSocket } from '../services/socket';
+import { getCameras, getEvents, getAnalyticsSummary } from '../services/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Camera, AlertTriangle, ShieldCheck, Activity, Target, Crosshair, Eye } from 'lucide-react';
@@ -36,48 +35,82 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const [camData, evtData] = await Promise.all([
-          getCameras().catch(() => ({ data: [], total: 0 })),
-          getEvents().catch(() => ({ data: [], total: 0 }))
+        const [camData, evtData, summary] = await Promise.all([
+          getCameras().catch(() => ({ items: [], total: 0 })),
+          getEvents().catch(() => ({ items: [], total: 0 })),
+          getAnalyticsSummary().catch(() => ({
+             total_cameras: 0, active_cameras: 0, total_events: 0, total_alerts: 0, unresolved_alerts: 0
+          }))
         ]);
         
-        const camList = camData.data || [];
+        const camList = camData.items || [];
         setCameras(camList);
         
         setStats(prev => ({
           ...prev,
-          totalCameras: camData.total || 0,
-          onlineCameras: camList.filter(c => c.status === 'online').length || 0,
-          eventsToday: evtData.total || 0
+          totalCameras: summary.total_cameras || camList.length,
+          onlineCameras: summary.active_cameras || camList.filter(c => c.status === 'active' || c.status === 'online').length,
+          activeAlerts: summary.unresolved_alerts || 0,
+          eventsToday: summary.total_events || evtData.total || 0,
+          liveDetections: 0,
+          trackedObjects: 0
         }));
 
-        setRecentEvents((evtData.data || []).slice(0, 8));
+        setRecentEvents((evtData.items || []).slice(0, 8));
       } catch (error) {
         console.error("Failed to load dashboard data", error);
       }
     };
     
     fetchDashboardData();
-
-    connectSocket();
     
-    socket.on('stats_update', (newStats) => {
-      setStats(prev => ({ ...prev, ...newStats }));
-    });
-    
-    socket.on('new_alert', (alert) => {
-      setStats(prev => ({ ...prev, activeAlerts: prev.activeAlerts + 1 }));
-      setRecentEvents(prev => [alert, ...prev].slice(0, 8));
-    });
+    // Subscribe to real-time events via WebSocket
+    import('../services/socket').then(({ socketService }) => {
+      socketService.subscribe('events');
+      
+      const handleNewEvent = (data) => {
+        if (data.event) {
+          setRecentEvents(prev => {
+            const id = data.event.event_id || data.event.id;
+            if (prev.some(e => (e.event_id || e.id) === id)) return prev;
+            return [data.event, ...prev].slice(0, 8); // Keep only 8 recent events
+          });
+          
+          setStats(prev => ({
+            ...prev,
+            eventsToday: prev.eventsToday + 1
+          }));
+        }
+      };
+      
+      const handleAlertCreated = (data) => {
+         setStats(prev => ({
+            ...prev,
+            activeAlerts: prev.activeAlerts + 1
+         }));
+      };
+      
+      const handleAlertResolved = (data) => {
+         setStats(prev => ({
+            ...prev,
+            activeAlerts: Math.max(0, prev.activeAlerts - 1)
+         }));
+      };
 
-    return () => {
-      socket.off('stats_update');
-      socket.off('new_alert');
-      disconnectSocket();
-    };
+      socketService.on('event.created', handleNewEvent);
+      socketService.on('alert.created', handleAlertCreated);
+      socketService.on('alert.resolved', handleAlertResolved);
+      
+      return () => {
+        socketService.off('event.created', handleNewEvent);
+        socketService.off('alert.created', handleAlertCreated);
+        socketService.off('alert.resolved', handleAlertResolved);
+        socketService.unsubscribe('events');
+      };
+    });
   }, []);
 
-  const activeAlertEvents = recentEvents.filter(e => e.severity === 'critical' || e.severity === 'warning');
+  const activeAlertEvents = recentEvents.filter(e => e.severity === 'critical' || e.severity === 'warning' || e.severity === 'HIGH');
 
   return (
     <motion.div 
@@ -201,25 +234,25 @@ const Dashboard = () => {
                   <AnimatePresence initial={false}>
                     {recentEvents.map((evt) => (
                       <motion.div 
-                        key={evt._id || evt.id || (evt.timestamp + evt.type)} 
+                        key={evt.event_id || evt._id || evt.id || (evt.timestamp + evt.event_type)} 
                         layout
                         initial={{ opacity: 0, x: -20, height: 0, marginBottom: 0 }}
                         animate={{ opacity: 1, x: 0, height: 'auto', marginBottom: 16 }}
                         transition={{ opacity: { duration: 0.2 }, layout: { type: "spring", stiffness: 300, damping: 30 } }}
                         className="relative pl-8 group origin-top"
                       >
-                        <div className={`absolute left-0 top-1 w-6 h-6 rounded-full border-4 border-surface flex items-center justify-center transition-transform group-hover:scale-125 ${evt.severity === 'critical' ? 'bg-danger shadow-[0_0_10px_#ef4444]' : evt.severity === 'warning' ? 'bg-warning' : 'bg-primary shadow-[0_0_10px_#3b82f6]'}`}>
+                        <div className={`absolute left-0 top-1 w-6 h-6 rounded-full border-4 border-surface flex items-center justify-center transition-transform group-hover:scale-125 ${evt.severity === 'critical' || evt.severity === 'HIGH' ? 'bg-danger shadow-[0_0_10px_#ef4444]' : evt.severity === 'warning' || evt.severity === 'MEDIUM' ? 'bg-warning' : 'bg-primary shadow-[0_0_10px_#3b82f6]'}`}>
                            <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
                         </div>
                         <div className="glass-panel p-3 rounded-lg hover:bg-surfaceHover transition-colors overflow-hidden">
                           <div className="flex justify-between items-start mb-1">
-                            <span className="text-xs font-bold text-slate-100 uppercase tracking-wide">{evt.type}</span>
-                            <span className="text-[10px] text-primary font-mono">{new Date(evt.timestamp || Date.now()).toLocaleTimeString()}</span>
+                            <span className="text-xs font-bold text-slate-100 uppercase tracking-wide">{evt.event_type || evt.type}</span>
+                            <span className="text-[10px] text-primary font-mono">{new Date(evt.timestamp * 1000 || Date.now()).toLocaleTimeString()}</span>
                           </div>
                           <div className="text-xs text-slate-400">
-                            {evt.camera_name || 'CAM_UNKNOWN'}
+                            {evt.camera_id || evt.camera_name || 'CAM_UNKNOWN'}
                           </div>
-                          {evt.severity === 'critical' && (
+                          {(evt.severity === 'critical' || evt.severity === 'HIGH') && (
                             <div className="mt-2 text-[10px] text-white font-bold bg-danger/80 px-2 py-1 rounded inline-block shadow-[0_0_10px_rgba(239,68,68,0.5)]">
                               IMMEDIATE ACTION REQUIRED
                             </div>

@@ -16,7 +16,7 @@ const Zones = () => {
       setIsLoading(true);
       try {
         const data = await getZones();
-        setZones(data.items || data.data || []);
+        setZones(data.items || []);
       } catch (error) {
         console.error("Failed to load zones", error);
       } finally {
@@ -29,7 +29,7 @@ const Zones = () => {
 
   const filteredZones = zones.filter(zone => 
     zone.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    zone.camera_name?.toLowerCase().includes(searchQuery.toLowerCase())
+    zone.camera_id?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -79,7 +79,7 @@ const Zones = () => {
               </TableHeader>
               <TableBody>
                 {filteredZones.map((zone) => (
-                  <TableRow key={zone.id || zone.zone_id}>
+                  <TableRow key={zone.zone_id || zone.id}>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         {zone.active !== false ? (
@@ -94,8 +94,8 @@ const Zones = () => {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2 text-slate-300">
-                        {zone.type === 'fence' ? <Hexagon className="w-4 h-4" /> : <Map className="w-4 h-4" />}
-                        <span className="capitalize">{zone.type || 'Polygon'}</span>
+                        {zone.zone_type === 'VIRTUAL_FENCE' ? <Hexagon className="w-4 h-4" /> : <Map className="w-4 h-4" />}
+                        <span className="capitalize">{zone.zone_type || 'Polygon'}</span>
                       </div>
                     </TableCell>
                     <TableCell className="font-medium text-slate-200">

@@ -16,6 +16,37 @@ const Cameras = () => {
   const [newCamera, setNewCamera] = useState({ name: '', camera_id: '', source_type: 'rtsp', source: '' });
   const [availableDevices, setAvailableDevices] = useState([]);
   const [activeCamera, setActiveCamera] = useState(null);
+  const [cameraEvents, setCameraEvents] = useState([]);
+
+  useEffect(() => {
+    let unsubscribe = () => {};
+    
+    if (activeCamera) {
+      setCameraEvents([]); // Reset events for new camera
+      const channelId = `camera:${activeCamera.camera_id || activeCamera.id}`;
+      
+      import('../services/socket').then(({ socketService }) => {
+        socketService.subscribe(channelId);
+        
+        const handleCameraEvent = (data) => {
+          if (data.event) {
+            setCameraEvents(prev => [data.event, ...prev].slice(0, 10)); // Keep last 10
+          }
+        };
+        
+        socketService.on('event.created', handleCameraEvent);
+        
+        unsubscribe = () => {
+          socketService.off('event.created', handleCameraEvent);
+          socketService.unsubscribe(channelId);
+        };
+      });
+    }
+    
+    return () => {
+      unsubscribe();
+    };
+  }, [activeCamera]);
 
   const fetchDevices = async () => {
     try {
@@ -63,7 +94,7 @@ const Cameras = () => {
       setIsLoading(true);
       try {
         const data = await getCameras();
-        setCameras(data.data || []);
+        setCameras(data.items || []);
       } catch (error) {
         console.error("Failed to load cameras", error);
       } finally {
@@ -129,7 +160,7 @@ const Cameras = () => {
               </TableHeader>
               <TableBody>
                 {filteredCameras.map((cam) => (
-                  <TableRow key={cam.id}>
+                  <TableRow key={cam.camera_id || cam.id}>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         {cam.status === 'online' ? (
@@ -255,10 +286,13 @@ const Cameras = () => {
             </div>
             <div className="aspect-video w-full relative">
               <VideoPlayer 
-                src={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/stream/${activeCamera.id || activeCamera.camera_id}`} 
+                src={null} 
                 cameraName={activeCamera.name} 
                 className="w-full h-full rounded-md"
               />
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                 <p className="bg-black/50 px-4 py-2 rounded text-white text-sm">Live stream unavailable</p>
+              </div>
             </div>
           </div>
         </div>

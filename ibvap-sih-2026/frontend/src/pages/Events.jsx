@@ -18,7 +18,7 @@ const Events = () => {
       setIsLoading(true);
       try {
         const data = await getEvents();
-        setEvents(data.data || []);
+        setEvents(data.items || []);
       } catch (error) {
         console.error("Failed to load events", error);
       } finally {
@@ -27,12 +27,36 @@ const Events = () => {
     };
     
     fetchEvents();
+    
+    // Subscribe to real-time events
+    import('../services/socket').then(({ socketService }) => {
+      socketService.subscribe('events');
+      
+      const handleNewEvent = (data) => {
+        if (data.event) {
+          setEvents(prev => {
+            // Prevent duplicates
+            const id = data.event.event_id || data.event.id;
+            if (prev.some(e => (e.event_id || e.id) === id)) return prev;
+            return [data.event, ...prev];
+          });
+        }
+      };
+      
+      socketService.on('event.created', handleNewEvent);
+      
+      // Cleanup on unmount
+      return () => {
+        socketService.off('event.created', handleNewEvent);
+        socketService.unsubscribe('events');
+      };
+    });
   }, []);
 
   const filteredEvents = events.filter(evt => {
     const matchesSearch = 
-      evt.type?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      evt.camera_name?.toLowerCase().includes(searchQuery.toLowerCase());
+      evt.event_type?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      evt.camera_id?.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesSeverity = filterSeverity === 'all' || evt.severity === filterSeverity;
     
@@ -107,12 +131,12 @@ const Events = () => {
               </TableHeader>
               <TableBody>
                 {filteredEvents.map((evt) => (
-                  <TableRow key={evt.id || evt._id}>
+                  <TableRow key={evt.event_id || evt.id}>
                     <TableCell className="font-mono text-sm text-slate-400">
-                      {new Date(evt.timestamp || Date.now()).toLocaleString()}
+                      {new Date(evt.timestamp * 1000 || Date.now()).toLocaleString()}
                     </TableCell>
                     <TableCell className="font-medium text-slate-200 uppercase text-xs tracking-wider">
-                      {evt.type}
+                      {evt.event_type}
                     </TableCell>
                     <TableCell>
                       <Badge variant={evt.severity === 'critical' ? 'danger' : evt.severity === 'warning' ? 'warning' : 'info'}>
@@ -120,7 +144,7 @@ const Events = () => {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-slate-300">
-                      {evt.camera_name || 'N/A'}
+                      {evt.camera_id || 'N/A'}
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">

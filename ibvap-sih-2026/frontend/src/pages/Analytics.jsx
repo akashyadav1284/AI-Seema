@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getEvents } from '../services/api';
+import { getAnalyticsSummary, getAnalyticsTrends, getAnalyticsEvents } from '../services/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { Activity, Download, Loader2 } from 'lucide-react';
@@ -27,7 +27,6 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 const Analytics = () => {
   const [isLoading, setIsLoading] = useState(true);
-  const [eventData, setEventData] = useState([]);
   
   // Chart Data State
   const [timelineData, setTimelineData] = useState([]);
@@ -38,12 +37,57 @@ const Analytics = () => {
     const fetchAnalyticsData = async () => {
       setIsLoading(true);
       try {
-        const res = await getEvents();
-        const events = res.data || [];
-        setEventData(events);
+        const [summaryRes, trendsRes, eventsRes] = await Promise.all([
+          getAnalyticsSummary().catch(() => null),
+          getAnalyticsTrends().catch(() => null),
+          getAnalyticsEvents().catch(() => null)
+        ]);
+
+        if (trendsRes && trendsRes.hourly_trends) {
+          const formattedTrends = trendsRes.hourly_trends.map(t => ({
+            time: t.hour.split('T')[1].substring(0, 5), // 'HH:MM'
+            critical: t.critical || 0,
+            warning: t.warning || 0,
+            info: t.info || 0
+          }));
+          setTimelineData(formattedTrends);
+        }
+
+        if (summaryRes) {
+          // You can also use eventsRes to build more detailed pie charts if needed.
+          // For now, let's derive severity data from whatever we can, or just mock it safely if backend doesn't provide severity aggregates directly.
+          // Alternatively, we can calculate from the total events if we fetch them all.
+          // The backend currently provides event counts by type, let's use that for the bar chart.
+        }
+
+        if (eventsRes) {
+          // Group by severity for pie chart
+          const severityCount = eventsRes.items.reduce((acc, evt) => {
+             // Map backend 'HIGH' to 'critical', 'MEDIUM' to 'warning', 'LOW' to 'info'
+             let sev = 'info';
+             if (evt.severity === 'HIGH' || evt.severity === 'critical') sev = 'critical';
+             else if (evt.severity === 'MEDIUM' || evt.severity === 'warning') sev = 'warning';
+             
+             acc[sev] = (acc[sev] || 0) + 1;
+             return acc;
+          }, { critical: 0, warning: 0, info: 0 });
+          
+          setSeverityData([
+            { name: 'Critical', value: severityCount.critical },
+            { name: 'Warning', value: severityCount.warning },
+            { name: 'Info', value: severityCount.info },
+          ].filter(item => item.value > 0));
+
+          // Group by event_type for bar chart
+          const typeCount = eventsRes.items.reduce((acc, evt) => {
+            acc[evt.event_type] = (acc[evt.event_type] || 0) + 1;
+            return acc;
+          }, {});
+
+          const tData = Object.entries(typeCount).map(([name, count]) => ({ name, count }));
+          setTypeData(tData);
+        }
         
-        // Process data for charts
-        processData(events);
       } catch (error) {
         console.error("Failed to load analytics data", error);
       } finally {
@@ -53,58 +97,6 @@ const Analytics = () => {
     
     fetchAnalyticsData();
   }, []);
-
-  const processData = (events) => {
-    // 1. Timeline Data (Group by hour for the last 24h)
-    const hours = {};
-    const now = new Date();
-    
-    // Initialize last 12 hours
-    for(let i = 11; i >= 0; i--) {
-      const d = new Date(now.getTime() - (i * 60 * 60 * 1000));
-      const hourStr = d.getHours() + ':00';
-      hours[hourStr] = { time: hourStr, critical: 0, warning: 0, info: 0 };
-    }
-    
-    // Dummy aggregation (in real app, use event timestamps)
-    Object.values(hours).forEach(h => {
-        h.critical = Math.floor(Math.random() * 5);
-        h.warning = Math.floor(Math.random() * 10);
-        h.info = Math.floor(Math.random() * 20);
-    });
-    
-    setTimelineData(Object.values(hours));
-
-    // 2. Severity Pie Chart Data
-    const severityCount = events.reduce((acc, evt) => {
-      acc[evt.severity || 'info'] = (acc[evt.severity || 'info'] || 0) + 1;
-      return acc;
-    }, { critical: 0, warning: 0, info: 0 });
-    
-    setSeverityData([
-      { name: 'Critical', value: severityCount.critical || 15 },
-      { name: 'Warning', value: severityCount.warning || 42 },
-      { name: 'Info', value: severityCount.info || 89 },
-    ]);
-
-    // 3. Event Types Bar Chart Data
-    const typeCount = events.reduce((acc, evt) => {
-      acc[evt.type || 'unknown'] = (acc[evt.type || 'unknown'] || 0) + 1;
-      return acc;
-    }, {});
-    
-    // Add dummy data if API returns empty
-    const tData = Object.keys(typeCount).length > 0 
-      ? Object.entries(typeCount).map(([name, count]) => ({ name, count }))
-      : [
-          { name: 'Line Cross', count: 45 },
-          { name: 'Intrusion', count: 32 },
-          { name: 'Loitering', count: 28 },
-          { name: 'Face Match', count: 12 },
-        ];
-        
-    setTypeData(tData);
-  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -130,35 +122,39 @@ const Analytics = () => {
           {/* Main Timeline Chart */}
           <Card className="lg:col-span-3">
             <CardHeader>
-              <CardTitle>Event Activity (Last 12 Hours)</CardTitle>
+              <CardTitle>Event Activity Trends</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={timelineData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorCritical" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={COLORS[0]} stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor={COLORS[0]} stopOpacity={0}/>
-                      </linearGradient>
-                      <linearGradient id="colorWarning" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={COLORS[1]} stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor={COLORS[1]} stopOpacity={0}/>
-                      </linearGradient>
-                      <linearGradient id="colorInfo" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={COLORS[2]} stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor={COLORS[2]} stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                    <XAxis dataKey="time" stroke="#475569" fontSize={12} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#475569" fontSize={12} tickLine={false} axisLine={false} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Area type="monotone" dataKey="info" name="Info" stroke={COLORS[2]} fillOpacity={1} fill="url(#colorInfo)" />
-                    <Area type="monotone" dataKey="warning" name="Warning" stroke={COLORS[1]} fillOpacity={1} fill="url(#colorWarning)" />
-                    <Area type="monotone" dataKey="critical" name="Critical" stroke={COLORS[0]} fillOpacity={1} fill="url(#colorCritical)" />
-                  </AreaChart>
-                </ResponsiveContainer>
+                {timelineData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={timelineData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorCritical" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={COLORS[0]} stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor={COLORS[0]} stopOpacity={0}/>
+                        </linearGradient>
+                        <linearGradient id="colorWarning" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={COLORS[1]} stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor={COLORS[1]} stopOpacity={0}/>
+                        </linearGradient>
+                        <linearGradient id="colorInfo" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={COLORS[2]} stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor={COLORS[2]} stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                      <XAxis dataKey="time" stroke="#475569" fontSize={12} tickLine={false} axisLine={false} />
+                      <YAxis stroke="#475569" fontSize={12} tickLine={false} axisLine={false} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Area type="monotone" dataKey="info" name="Info" stroke={COLORS[2]} fillOpacity={1} fill="url(#colorInfo)" />
+                      <Area type="monotone" dataKey="warning" name="Warning" stroke={COLORS[1]} fillOpacity={1} fill="url(#colorWarning)" />
+                      <Area type="monotone" dataKey="critical" name="Critical" stroke={COLORS[0]} fillOpacity={1} fill="url(#colorCritical)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-slate-500">No trend data available</div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -170,25 +166,29 @@ const Analytics = () => {
             </CardHeader>
             <CardContent className="flex flex-col items-center justify-center">
               <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={severityData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                      stroke="none"
-                    >
-                      {severityData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<CustomTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
+                {severityData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={severityData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                        stroke="none"
+                      >
+                        {severityData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<CustomTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-slate-500">No data</div>
+                )}
               </div>
               <div className="flex gap-4 mt-2">
                 {severityData.map((entry, index) => (
@@ -208,15 +208,19 @@ const Analytics = () => {
             </CardHeader>
             <CardContent>
               <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={typeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                    <XAxis dataKey="name" stroke="#475569" fontSize={12} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#475569" fontSize={12} tickLine={false} axisLine={false} />
-                    <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1e293b', opacity: 0.4 }} />
-                    <Bar dataKey="count" name="Incidents" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                {typeData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={typeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                      <XAxis dataKey="name" stroke="#475569" fontSize={12} tickLine={false} axisLine={false} />
+                      <YAxis stroke="#475569" fontSize={12} tickLine={false} axisLine={false} />
+                      <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1e293b', opacity: 0.4 }} />
+                      <Bar dataKey="count" name="Incidents" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-slate-500">No data</div>
+                )}
               </div>
             </CardContent>
           </Card>

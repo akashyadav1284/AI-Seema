@@ -1,5 +1,8 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
+import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import LiveMonitoring from './pages/LiveMonitoring';
 import Cameras from './pages/Cameras';
@@ -22,22 +25,30 @@ const PlaceholderPage = ({ title }) => (
 function App() {
   return (
     <BrowserRouter>
-      <Layout>
+      <AuthProvider>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/live" element={<LiveMonitoring />} />
-          <Route path="/cameras" element={<Cameras />} />
-          <Route path="/alerts" element={<Alerts />} />
-          <Route path="/events" element={<Events />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/reports" element={<PlaceholderPage title="Automated Reports" />} />
-          <Route path="/health" element={<SystemHealth />} />
-          <Route path="/settings" element={<PlaceholderPage title="System Settings" />} />
-          <Route path="/zones" element={<Zones />} />
-          <Route path="/tracks" element={<Tracks />} />
-          <Route path="/evidence" element={<Evidence />} />
+          <Route path="/login" element={<Login />} />
+          
+          <Route element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/live" element={<LiveMonitoring />} />
+            <Route path="/cameras" element={<Cameras />} />
+            <Route path="/alerts" element={<Alerts />} />
+            <Route path="/events" element={<Events />} />
+            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/reports" element={<PlaceholderPage title="Automated Reports" />} />
+            <Route path="/health" element={<SystemHealth />} />
+            <Route path="/settings" element={<PlaceholderPage title="System Settings" />} />
+            <Route path="/zones" element={<Zones />} />
+            <Route path="/tracks" element={<Tracks />} />
+            <Route path="/evidence" element={<Evidence />} />
+          </Route>
         </Routes>
-      </Layout>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

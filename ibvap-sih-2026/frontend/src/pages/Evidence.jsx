@@ -1,8 +1,45 @@
 import { useState, useEffect } from 'react';
-import { getEvents } from '../services/api';
+import { getEvents, fetchEvidenceBlob } from '../services/api';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Image as ImageIcon, Video, Search, Download, Calendar, Loader2, ExternalLink } from 'lucide-react';
+
+const SecureImage = ({ filename, alt, className }) => {
+  const [blobUrl, setBlobUrl] = useState(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let url = null;
+    if (filename) {
+      fetchEvidenceBlob(filename)
+        .then(blob => {
+          url = URL.createObjectURL(blob);
+          setBlobUrl(url);
+        })
+        .catch(err => {
+          console.error("Failed to fetch image blob", err);
+          setError(true);
+        });
+    }
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [filename]);
+
+  if (error) {
+    return <img src="https://placehold.co/600x400/1e293b/475569?text=Image+Not+Found" alt="Not found" className={className} />;
+  }
+
+  if (!blobUrl) {
+    return (
+      <div className={`${className} flex items-center justify-center bg-slate-900`}>
+         <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return <img src={blobUrl} alt={alt} className={className} />;
+};
 
 const Evidence = () => {
   const [evidenceItems, setEvidenceItems] = useState([]);
@@ -15,19 +52,23 @@ const Evidence = () => {
       setIsLoading(true);
       try {
         const eventsData = await getEvents();
-        const eventsWithEvidence = (eventsData.data || []).filter(e => e.evidence);
+        const eventsWithEvidence = (eventsData.items || []).filter(e => e.evidence);
         
         // Transform to evidence items
-        const items = eventsWithEvidence.map(e => ({
-          id: e.id || e._id,
-          eventId: e.id || e._id,
-          type: e.evidence.type || 'snapshot',
-          url: e.evidence.url || `/api/evidence/snapshots/${e.evidence.filename}`,
-          timestamp: e.timestamp,
-          camera: e.camera_name,
-          event_type: e.type,
-          severity: e.severity
-        }));
+        const items = eventsWithEvidence.map(e => {
+          // If evidence is just a string filename, or an object containing filename
+          const filename = typeof e.evidence === 'string' ? e.evidence : e.evidence.filename || e.evidence.url?.split('/').pop();
+          return {
+            id: e.event_id || e.id,
+            eventId: e.event_id || e.id,
+            type: 'snapshot', // Default since backend currently mostly returns snapshots
+            filename: filename,
+            timestamp: e.timestamp,
+            camera: e.camera_id,
+            event_type: e.event_type,
+            severity: e.severity
+          };
+        });
         setEvidenceItems(items);
       } catch (error) {
         console.error("Failed to load evidence", error);
@@ -106,12 +147,11 @@ const Evidence = () => {
             {filteredItems.map(item => (
               <Card key={item.id} className="overflow-hidden group hover:border-primary/50 transition-colors">
                 <div className="aspect-video relative bg-black flex items-center justify-center overflow-hidden">
-                   {item.type === 'snapshot' ? (
-                     <img 
-                       src={item.url.startsWith('/') ? `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}${item.url}` : item.url} 
+                   {item.type === 'snapshot' && item.filename ? (
+                     <SecureImage 
+                       filename={item.filename}
                        alt="Evidence" 
                        className="w-full h-full object-contain"
-                       onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/600x400/1e293b/475569?text=Image+Not+Found'; }}
                      />
                    ) : (
                      <div className="w-full h-full flex items-center justify-center bg-slate-900">
@@ -139,7 +179,7 @@ const Evidence = () => {
                   <div className="flex justify-between items-start mb-2">
                     <div>
                       <p className="font-medium text-slate-200">{item.camera || 'Unknown Camera'}</p>
-                      <p className="text-xs text-slate-400 font-mono mt-1">{new Date(item.timestamp).toLocaleString()}</p>
+                      <p className="text-xs text-slate-400 font-mono mt-1">{new Date(item.timestamp * 1000).toLocaleString()}</p>
                     </div>
                     <Button variant="ghost" size="sm" className="text-primary h-8 px-2">
                        Event Detail
