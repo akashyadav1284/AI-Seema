@@ -1,6 +1,7 @@
 import cv2
 import json
 import httpx
+import asyncio
 from starlette.concurrency import run_in_threadpool
 from app.services.video_service import VideoService, enhance_low_light
 from app.services.detector import Detector
@@ -14,6 +15,22 @@ import time
 # Global detector instance so we don't reload the model on every stream connection
 detector = Detector()
 detector.initialize()
+
+async def post_detection_payload(internal_token: str, payload_json: str, frame_bytes: bytes):
+    async with httpx.AsyncClient(base_url="http://127.0.0.1:8000") as client:
+        try:
+            # Add timeout to avoid hanging
+            await client.post(
+                "/api/detections/",
+                headers={"Authorization": f"Bearer {internal_token}"},
+                data={"payload": payload_json},
+                files={"frame": ("frame.jpg", frame_bytes, "image/jpeg")},
+                timeout=5.0
+            )
+        except Exception as e:
+            import traceback
+            print(f"Error posting to detections API: {type(e).__name__} - {e}")
+            traceback.print_exc()
 
 async def generate_annotated_frames(camera_id: str):
     # Dynamically fetch camera configuration
@@ -64,52 +81,18 @@ async def generate_annotated_frames(camera_id: str):
             if frame_count % settings.VIDEO_FRAME_SKIP != 0:
                 continue
             
-            enhanced = await run_in_threadpool(enhance_low_light, frame)
+            # Skip heavy low-light enhancement to prevent lag
+            enhanced = frame
             result = await run_in_threadpool(detector.detect, enhanced, frame_number=frame_count)
             tracks = await run_in_threadpool(tracker.update, result)
             
-            # Post to Backend (Decoupled Architecture)
-            ret, buffer = await run_in_threadpool(cv2.imencode, '.jpg', enhanced)
-            if ret and len(tracks) > 0:
-                frame_bytes = buffer.tobytes()
-                
-                tracked_detections = []
-                for t in tracks:
-                    tracked_detections.append(TrackedDetection(
-                        track_id=t["track_id"],
-                        class_name=t["class_name"],
-                        confidence=t["confidence"],
-                        bbox={"x1": t["bbox"]["x1"], "y1": t["bbox"]["y1"], "x2": t["bbox"]["x2"], "y2": t["bbox"]["y2"]},
-                        centroid={"x": t["centroid"]["x"], "y": t["centroid"]["y"]},
-                        previous_centroid={"x": t.get("previous_centroid", {}).get("x", 0), "y": t.get("previous_centroid", {}).get("y", 0)} if t.get("previous_centroid") else None,
-                        active=t["active"],
-                        movement_state=t["movement_state"],
-                        direction=t["direction"]
-                    ))
-                
-                payload = DetectionPayload(
-                    camera_id=camera_id,
-                    timestamp=time.time(),
-                    frame_number=frame_count,
-                    tracks=tracked_detections
-                )
-                
-                async with httpx.AsyncClient(base_url="http://127.0.0.1:8000") as client:
-                    try:
-                        await client.post(
-                            "/api/detections/",
-                            headers={"Authorization": f"Bearer {internal_token}"},
-                            data={"payload": payload.model_dump_json()},
-                            files={"frame": ("frame.jpg", frame_bytes, "image/jpeg")}
-                        )
-                    except Exception as e:
-                        print(f"Error posting to detections API: {e}")
-            
-            # Annotate tracking
+            # Annotate tracking on the frame BEFORE encoding
             for track in tracks:
                 box = track["bbox"]
                 x1, y1, x2, y2 = int(box["x1"]), int(box["y1"]), int(box["x2"]), int(box["y2"])
                 label = f"ID:{track['track_id']} {track['class_name']} {track['confidence']:.2f}"
+                if track.get('direction') and track['direction'] != "UNKNOWN":
+                    label += f" {track['direction']}"
                 cv2.rectangle(enhanced, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(enhanced, label, (x1, max(y1 - 10, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
             
@@ -136,14 +119,40 @@ async def generate_annotated_frames(camera_id: str):
                     if len(line) == 2:
                         p1, p2 = line[0], line[1]
                         cv2.line(enhanced, (int(p1["x"]), int(p1["y"])), (int(p2["x"]), int(p2["y"])), (255, 0, 0), 2)
+
+            # Encode annotated frame for stream and background task
+            ret, buffer = await run_in_threadpool(cv2.imencode, '.jpg', enhanced, [int(cv2.IMWRITE_JPEG_QUALITY), 60])
+            if not ret:
+                continue
             
-            if ret:
-                frame_bytes = buffer.tobytes()
-            else:
-                ret, buffer = await run_in_threadpool(cv2.imencode, '.jpg', enhanced)
-                if not ret:
-                    continue
-                frame_bytes = buffer.tobytes()
+            frame_bytes = buffer.tobytes()
+
+            # Post to Backend (Decoupled Architecture - Async Background Task)
+            if len(tracks) > 0:
+                tracked_detections = []
+                for t in tracks:
+                    tracked_detections.append(TrackedDetection(
+                        track_id=t["track_id"],
+                        class_name=t["class_name"],
+                        confidence=t["confidence"],
+                        bbox={"x1": t["bbox"]["x1"], "y1": t["bbox"]["y1"], "x2": t["bbox"]["x2"], "y2": t["bbox"]["y2"]},
+                        centroid={"x": t["centroid"]["x"], "y": t["centroid"]["y"]},
+                        previous_centroid={"x": t.get("previous_centroid", {}).get("x", 0), "y": t.get("previous_centroid", {}).get("y", 0)} if t.get("previous_centroid") else None,
+                        active=t["active"],
+                        movement_state=t["movement_state"],
+                        direction=t["direction"]
+                    ))
+                
+                payload = DetectionPayload(
+                    camera_id=camera_id,
+                    timestamp=time.time(),
+                    frame_number=frame_count,
+                    tracks=tracked_detections
+                )
+                
+                asyncio.create_task(post_detection_payload(internal_token, payload.model_dump_json(), frame_bytes))
+            
+            # Yield MJPEG immediately
             yield (b"--frame\r\n"
                    b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n")
     finally:

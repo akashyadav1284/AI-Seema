@@ -327,20 +327,12 @@ const Cameras = () => {
               </h2>
               <Button variant="ghost" className="h-8 text-textMuted" onClick={() => setActiveCamera(null)}>Close</Button>
             </div>
-            <div className="aspect-video w-full relative bg-black rounded-md overflow-hidden flex items-center justify-center">
-              {isDemoMode ? (
-                <div className="text-center text-slate-400">
-                  <Play className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                  <p>Demo Mode Stream Active</p>
-                  <p className="text-xs text-slate-500 mt-1">Simulated output</p>
-                </div>
-              ) : (
-                <VideoPlayer 
-                  src={null} 
-                  cameraName={activeCamera.name} 
-                  className="w-full h-full"
-                />
-              )}
+            <div className="aspect-video w-full relative bg-black rounded-md overflow-hidden">
+              <VideoPlayer 
+                src={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/stream/${activeCamera.camera_id || activeCamera.id}`} 
+                cameraName={activeCamera.name} 
+                className="w-full h-full"
+              />
             </div>
           </div>
         </div>

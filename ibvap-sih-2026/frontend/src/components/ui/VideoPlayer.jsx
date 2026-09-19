@@ -12,6 +12,7 @@ export const VideoPlayer = ({ src, cameraName, capabilities = [], detections = [
   const [status, setStatus] = useState('CONNECTING');
   const [retryCount, setRetryCount] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [streamId, setStreamId] = useState(Date.now());
   
   const containerRef = useRef(null);
   const bufferTimer = useRef(null);
@@ -21,16 +22,15 @@ export const VideoPlayer = ({ src, cameraName, capabilities = [], detections = [
   const token = localStorage.getItem('token');
   const tokenParam = token ? `token=${encodeURIComponent(token)}` : '';
   const baseSrc = src ? `${src}${src.includes('?') ? '&' : '?'}${tokenParam}` : '';
-  const streamSrc = (src && (status === 'CONNECTING' || status === 'RECONNECTING' || status === 'LIVE' || status === 'BUFFERING')) 
-    ? `${baseSrc}&t=${Date.now()}` 
-    : '';
+  const streamSrc = src ? `${baseSrc}&t=${streamId}` : '';
 
   // Setup Buffering Timeout
   useEffect(() => {
     if (status === 'CONNECTING' || status === 'RECONNECTING') {
       bufferTimer.current = setTimeout(() => {
-        setStatus('BUFFERING');
-      }, BUFFER_TIMEOUT_MS);
+        // onLoad is unreliable for MJPEG streams in some browsers, so we assume LIVE if no error after 1.5s
+        setStatus('LIVE');
+      }, 1500);
     }
 
     return () => {
@@ -51,6 +51,7 @@ export const VideoPlayer = ({ src, cameraName, capabilities = [], detections = [
       setStatus('ERROR'); // brief flash of error
       retryTimer.current = setTimeout(() => {
         setRetryCount(prev => prev + 1);
+        setStreamId(Date.now());
         setStatus('RECONNECTING');
       }, 1000);
     } else {
@@ -60,6 +61,7 @@ export const VideoPlayer = ({ src, cameraName, capabilities = [], detections = [
 
   const manualReconnect = () => {
     setRetryCount(0);
+    setStreamId(Date.now());
     setStatus('CONNECTING');
   };
 

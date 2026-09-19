@@ -1,7 +1,7 @@
+import datetime
 import asyncio
 import os
 import sys
-import datetime
 
 # Add backend directory to sys.path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -22,12 +22,12 @@ async def main():
     hashed_password = get_password_hash(password)
     
     user = {
+        "_id": "USR-ADMIN",
         "email": email,
         "password_hash": hashed_password,
         "role": "admin",
         "is_active": True,
         "name": "System Administrator",
-        "_id": "USR-ADMIN",
         "created_at": datetime.datetime.utcnow().isoformat(),
         "updated_at": datetime.datetime.utcnow().isoformat()
     }
