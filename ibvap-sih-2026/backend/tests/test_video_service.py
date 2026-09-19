@@ -29,3 +29,19 @@ def test_read_frame_empty():
     ret, frame = service.read_frame()
     assert ret is False
     assert frame is None
+
+from unittest.mock import patch, MagicMock
+
+def test_rtsp_source_handling():
+    # Mock cv2.VideoCapture to avoid actual network call
+    mock_capture = MagicMock()
+    mock_capture.isOpened.return_value = True
+    with patch('cv2.VideoCapture', return_value=mock_capture):
+        service = VideoService(source_type="rtsp", source="rtsp://10.28.45.143:554/stream")
+        assert service.open() is True
+        assert service.is_opened is True
+    
+    # Test masked url logic
+    from app.services.video_service import _mask_url
+    assert _mask_url("rtsp://admin:pass123@10.28.45.143/stream") == "rtsp://admin:***@10.28.45.143/stream"
+
