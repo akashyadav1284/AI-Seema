@@ -29,10 +29,8 @@ const Alerts = () => {
   useEffect(() => {
     fetchAlertsData();
     
-    // Polling as a fallback since WebSockets are excluded in Phase 11B
     const interval = setInterval(fetchAlertsData, 10000);
     
-    // Subscribe to real-time events via WebSocket
     let unsubscribe = () => {};
     import('../services/socket').then(({ socketService }) => {
       socketService.subscribe('events');
@@ -102,44 +100,44 @@ const Alerts = () => {
     <div className="flex flex-col h-[calc(100vh-6rem)] animate-in fade-in duration-500 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white flex items-center gap-2">
+          <h1 className="text-2xl font-bold tracking-tight text-text flex items-center gap-2">
             <ShieldAlert className="text-danger w-6 h-6" /> 
             Alerts Center
           </h1>
-          <p className="text-slate-400 text-sm mt-1">Incident feed from all virtual border sectors.</p>
+          <p className="text-textMuted text-sm mt-1">Incident feed from all virtual border sectors.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 bg-slate-100 p-1 rounded-md border border-slate-200">
           <button 
             onClick={() => setFilter('all')} 
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${filter === 'all' ? 'bg-primary text-white' : 'bg-surface border border-border text-slate-400 hover:text-white'}`}
+            className={`px-4 py-1.5 rounded text-sm font-medium transition-colors ${filter === 'all' ? 'bg-white text-primary shadow-sm' : 'text-textMuted hover:text-text'}`}
           >
             All
           </button>
           <button 
             onClick={() => setFilter('HIGH')} 
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${filter === 'HIGH' ? 'bg-danger text-white shadow-[0_0_10px_#ef4444]' : 'bg-surface border border-border text-slate-400 hover:text-danger'}`}
+            className={`px-4 py-1.5 rounded text-sm font-medium transition-colors ${filter === 'HIGH' ? 'bg-danger text-white shadow-sm' : 'text-textMuted hover:text-danger'}`}
           >
             High
           </button>
           <button 
             onClick={() => setFilter('MEDIUM')} 
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${filter === 'MEDIUM' ? 'bg-warning text-black shadow-[0_0_10px_#f59e0b]' : 'bg-surface border border-border text-slate-400 hover:text-warning'}`}
+            className={`px-4 py-1.5 rounded text-sm font-medium transition-colors ${filter === 'MEDIUM' ? 'bg-warning text-white shadow-sm' : 'text-textMuted hover:text-warning'}`}
           >
             Medium
           </button>
         </div>
       </div>
 
-      <Card className="flex-1 flex flex-col overflow-hidden glass-panel border-primary/20 shadow-xl shadow-primary/5">
+      <Card className="flex-1 flex flex-col overflow-hidden bg-white shadow-sm border-border">
         <CardContent className="flex-1 overflow-auto p-0 custom-scrollbar">
           {isLoading && alerts.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-500">
+            <div className="h-full flex flex-col items-center justify-center text-textMuted">
               <Activity className="w-8 h-8 animate-spin mb-4 text-primary" />
               <p>Loading alert stream...</p>
             </div>
           ) : filteredAlerts.length > 0 ? (
             <Table>
-              <TableHeader className="bg-surface/50 sticky top-0 backdrop-blur-md z-10 border-b border-primary/20">
+              <TableHeader className="bg-slate-50 sticky top-0 z-10 border-b border-border shadow-sm">
                 <TableRow>
                   <TableHead className="w-[50px]"></TableHead>
                   <TableHead>Time</TableHead>
@@ -155,18 +153,18 @@ const Alerts = () => {
                   {filteredAlerts.map((alert) => (
                     <motion.tr 
                       key={alert.alert_id}
-                      initial={{ opacity: 0, backgroundColor: 'rgba(59, 130, 246, 0.2)' }}
+                      initial={{ opacity: 0, backgroundColor: '#f1f5f9' }}
                       animate={{ opacity: 1, backgroundColor: 'transparent' }}
                       layout
-                      className="group hover:bg-surfaceHover border-b border-border transition-colors"
+                      className="group hover:bg-slate-50 border-b border-slate-100 transition-colors"
                     >
                       <TableCell>
-                        <div className={`w-2 h-2 rounded-full ${alert.severity === 'HIGH' ? 'bg-danger animate-pulse shadow-[0_0_8px_#ef4444]' : alert.severity === 'MEDIUM' ? 'bg-warning' : 'bg-primary'}`}></div>
+                        <div className={`w-2 h-2 rounded-full ${alert.severity === 'HIGH' ? 'bg-danger animate-pulse' : alert.severity === 'MEDIUM' ? 'bg-warning' : 'bg-primary'}`}></div>
                       </TableCell>
-                      <TableCell className="text-slate-300 font-mono text-sm">
+                      <TableCell className="text-textMuted font-mono text-xs">
                         {new Date(alert.created_at * 1000).toLocaleString()}
                       </TableCell>
-                      <TableCell className="font-semibold text-white tracking-wide uppercase text-xs">
+                      <TableCell className="font-semibold text-text tracking-wide uppercase text-xs">
                         {alert.alert_type}
                       </TableCell>
                       <TableCell>
@@ -175,13 +173,13 @@ const Alerts = () => {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2 text-slate-400 text-sm">
-                          <Camera className="w-4 h-4 text-slate-500" />
+                        <div className="flex items-center gap-2 text-textMuted text-sm font-medium">
+                          <Camera className="w-4 h-4 text-slate-400" />
                           {alert.camera_id}
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2 text-slate-500 text-xs uppercase font-bold tracking-wider">
+                        <div className="flex items-center gap-2 text-textMuted text-xs uppercase font-bold tracking-wider">
                           {alert.status === 'RESOLVED' ? (
                             <><CheckCircle2 className="w-4 h-4 text-success" /> Resolved</>
                           ) : alert.status === 'ACKNOWLEDGED' ? (
@@ -196,7 +194,7 @@ const Alerts = () => {
                           {alert.status === 'NEW' && (
                             <Button 
                               size="sm" 
-                              variant="outline" 
+                              variant="secondary" 
                               onClick={() => handleAcknowledge(alert.alert_id)}
                               disabled={!canActionAlert}
                             >
@@ -206,8 +204,7 @@ const Alerts = () => {
                           {(alert.status === 'NEW' || alert.status === 'ACKNOWLEDGED') && (
                             <Button 
                               size="sm" 
-                              variant="default"
-                              className="bg-success hover:bg-success/90"
+                              variant="primary"
                               onClick={() => handleResolve(alert.alert_id)}
                               disabled={!canActionAlert}
                             >
@@ -222,9 +219,9 @@ const Alerts = () => {
               </TableBody>
             </Table>
           ) : (
-            <div className="h-full flex flex-col items-center justify-center text-slate-500">
+            <div className="h-full flex flex-col items-center justify-center text-textMuted">
               <ShieldCheck className="w-16 h-16 text-success/40 mb-4" />
-              <p className="text-lg font-medium text-slate-300">All Sectors Secure</p>
+              <p className="text-lg font-medium text-text">All Sectors Secure</p>
               <p className="text-sm mt-1">No alerts matching your criteria.</p>
             </div>
           )}

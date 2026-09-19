@@ -6,42 +6,34 @@
   body {
     margin: 0;
     background-color: theme('colors.background');
-    color: theme('colors.slate.200');
-    /* Cyber grid background */
-    background-image: 
-      linear-gradient(rgba(59, 130, 246, 0.05) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(59, 130, 246, 0.05) 1px, transparent 1px);
-    background-size: 40px 40px;
-    background-position: center center;
-    background-attachment: fixed;
-    overflow-x: hidden;
+    color: theme('colors.text');
     @apply antialiased font-sans;
   }
 }
 
-/* Glassmorphism utility */
+/* Glassmorphism utility - updated for light theme */
 .glass-panel {
-  background: rgba(20, 24, 38, 0.6);
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  border: 1px solid theme('colors.border');
+  box-shadow: theme('boxShadow.soft');
 }
 
 /* Custom scrollbar for operations center feel */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-surface; 
+  @apply bg-background; 
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-slate-700 rounded-full; 
+  @apply bg-slate-300 rounded-full; 
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-slate-600; 
+  @apply bg-slate-400; 
 }

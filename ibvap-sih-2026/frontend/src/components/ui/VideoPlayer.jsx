@@ -88,16 +88,16 @@ export const VideoPlayer = ({ src, cameraName, capabilities = [], detections = [
       <div className="absolute top-0 inset-x-0 p-3 bg-gradient-to-b from-black/80 to-transparent flex items-center justify-between z-20 opacity-0 group-hover:opacity-100 transition-opacity">
         <div className="flex items-center gap-2">
           <span className={cn(
-            "w-2 h-2 rounded-full shadow-[0_0_8px_currentColor]",
-            status === 'LIVE' ? "bg-success text-success animate-pulse" :
-            status === 'BUFFERING' || status === 'CONNECTING' || status === 'RECONNECTING' ? "bg-warning text-warning" :
-            "bg-danger text-danger"
+            "w-2 h-2 rounded-full",
+            status === 'LIVE' ? "bg-success animate-pulse" :
+            status === 'BUFFERING' || status === 'CONNECTING' || status === 'RECONNECTING' ? "bg-warning" :
+            "bg-danger"
           )}></span>
           <span className="text-sm font-semibold text-white drop-shadow-md">{cameraName}</span>
         </div>
         <div className="flex gap-2">
           {capabilities.map(cap => (
-            <span key={cap} className="px-1.5 py-0.5 rounded bg-primary/20 border border-primary/40 text-primary text-[10px] font-bold uppercase tracking-wider">
+            <span key={cap} className="px-1.5 py-0.5 rounded bg-primary text-white text-[10px] font-bold uppercase tracking-wider">
               {cap}
             </span>
           ))}

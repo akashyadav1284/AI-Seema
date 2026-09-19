@@ -10,17 +10,17 @@ export function Table({ className, ...props }) {
 }
 
 export function TableHeader({ className, ...props }) {
-  return <thead className={cn("border-b border-border bg-surfaceHover/50", className)} {...props} />;
+  return <thead className={cn("border-b border-border bg-slate-50", className)} {...props} />;
 }
 
 export function TableBody({ className, ...props }) {
-  return <tbody className={cn("[&_tr:last-child]:border-0", className)} {...props} />;
+  return <tbody className={cn("[&_tr:last-child]:border-0 bg-white", className)} {...props} />;
 }
 
 export function TableRow({ className, ...props }) {
   return (
     <tr
-      className={cn("border-b border-border transition-colors hover:bg-surfaceHover/30", className)}
+      className={cn("border-b border-border transition-colors hover:bg-slate-50", className)}
       {...props}
     />
   );
@@ -29,7 +29,7 @@ export function TableRow({ className, ...props }) {
 export function TableHead({ className, ...props }) {
   return (
     <th
-      className={cn("h-12 px-4 text-left align-middle font-medium text-slate-400 [&:has([role=checkbox])]:pr-0", className)}
+      className={cn("h-12 px-4 text-left align-middle font-semibold text-textMuted text-xs uppercase tracking-wider [&:has([role=checkbox])]:pr-0", className)}
       {...props}
     />
   );

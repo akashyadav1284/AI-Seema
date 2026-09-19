@@ -48,14 +48,14 @@ const LiveMonitoring = () => {
     <div className="flex flex-col h-[calc(100vh-6rem)] animate-in fade-in duration-500 space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white">Live Monitoring</h1>
-          <p className="text-slate-400 text-sm mt-1">Real-time surveillance feeds with AI intelligence</p>
+          <h1 className="text-2xl font-bold tracking-tight text-text">Live Monitoring</h1>
+          <p className="text-textMuted text-sm mt-1">Real-time surveillance feeds with AI intelligence</p>
         </div>
         
         <div className="flex items-center gap-3">
           {viewMode === 'single' && (
             <select 
-              className="bg-surface border border-border text-slate-200 text-sm rounded-md px-3 py-2 focus:ring-primary focus:border-primary"
+              className="bg-white border border-border text-text text-sm rounded-md px-3 py-2 focus:ring-primary focus:border-primary shadow-sm"
               value={activeCameraId || ''}
               onChange={(e) => setActiveCameraId(e.target.value)}
             >
@@ -65,31 +65,31 @@ const LiveMonitoring = () => {
             </select>
           )}
 
-          <div className="flex items-center p-1 bg-surface border border-border rounded-lg">
+          <div className="flex items-center p-1 bg-white border border-border rounded-lg shadow-sm">
             <button 
               onClick={() => setViewMode('single')}
-              className={cn("p-1.5 rounded-md transition-colors text-slate-400", viewMode === 'single' && "bg-slate-800 text-white shadow-sm")}
+              className={cn("p-1.5 rounded-md transition-colors text-textMuted", viewMode === 'single' && "bg-slate-100 text-primary")}
               title="Single View"
             >
               <Square className="w-5 h-5" />
             </button>
             <button 
               onClick={() => setViewMode('grid')}
-              className={cn("p-1.5 rounded-md transition-colors text-slate-400", viewMode === 'grid' && "bg-slate-800 text-white shadow-sm")}
+              className={cn("p-1.5 rounded-md transition-colors text-textMuted", viewMode === 'grid' && "bg-slate-100 text-primary")}
               title="2x2 Grid View"
             >
               <LayoutGrid className="w-5 h-5" />
             </button>
           </div>
           
-          <Button variant="secondary" className="gap-2 hidden sm:flex">
+          <Button variant="secondary" className="gap-2 hidden sm:flex bg-white">
             <Filter className="w-4 h-4" />
             Filters
           </Button>
         </div>
       </div>
       
-      <div className="flex-1 bg-surface border border-border rounded-xl p-4 overflow-y-auto">
+      <div className="flex-1 bg-slate-100 border border-border rounded-xl p-4 overflow-y-auto shadow-inner">
         {isLoading ? (
           <div className="h-full flex flex-col items-center justify-center text-slate-500">
             <Loader2 className="w-8 h-8 animate-spin mb-4 text-primary" />

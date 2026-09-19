@@ -18,73 +18,77 @@ const SystemHealth = () => {
       className="flex flex-col h-full space-y-6"
     >
       <motion.div variants={itemVariants}>
-        <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">System Health</h2>
-        <p className="text-slate-400 text-sm mt-1">Network Topology & Live Diagnostic Metrics</p>
+        <h2 className="text-2xl font-bold tracking-tight text-text">System Health</h2>
+        <p className="text-textMuted text-sm mt-1">Network Topology & Live Diagnostic Metrics</p>
       </motion.div>
 
       {/* 3D Topology Visualization */}
-      <motion.div variants={itemVariants} className="w-full h-[400px]">
+      <motion.div variants={itemVariants} className="w-full h-[400px] border border-border rounded-xl overflow-hidden bg-slate-50 shadow-sm relative">
         <SecurityTopology3D />
+        <div className="absolute top-4 left-4 pointer-events-none bg-white/80 backdrop-blur-sm p-3 rounded shadow-sm border border-border">
+          <p className="text-xs font-bold text-text uppercase tracking-wider">Topology Map</p>
+          <p className="text-[10px] text-textMuted">Interactive real-time node rendering</p>
+        </div>
       </motion.div>
 
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <motion.div variants={itemVariants}>
-          <Card className="hover:border-primary/50 transition-colors">
+          <Card className="hover:border-primary/20 transition-colors shadow-sm">
             <CardHeader className="py-4 pb-2 border-none">
-              <CardTitle className="text-sm text-slate-400 flex items-center justify-between">
+              <CardTitle className="text-sm text-textMuted flex items-center justify-between font-semibold uppercase tracking-wider">
                 AI Inference Engine
-                <Cpu className="w-4 h-4 text-purple-400" />
+                <Cpu className="w-4 h-4 text-purple-600" />
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-slate-100">Optimal</div>
-              <div className="text-xs text-success mt-1">Latency: 12ms</div>
+              <div className="text-2xl font-bold text-text">Optimal</div>
+              <div className="text-xs text-success font-medium mt-1">Latency: 12ms</div>
             </CardContent>
           </Card>
         </motion.div>
 
         <motion.div variants={itemVariants}>
-          <Card className="hover:border-primary/50 transition-colors">
+          <Card className="hover:border-info/20 transition-colors shadow-sm">
             <CardHeader className="py-4 pb-2 border-none">
-              <CardTitle className="text-sm text-slate-400 flex items-center justify-between">
+              <CardTitle className="text-sm text-textMuted flex items-center justify-between font-semibold uppercase tracking-wider">
                 Database Node
-                <Database className="w-4 h-4 text-blue-400" />
+                <Database className="w-4 h-4 text-info" />
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-slate-100">Connected</div>
-              <div className="text-xs text-success mt-1">Pool utilization: 14%</div>
+              <div className="text-2xl font-bold text-text">Connected</div>
+              <div className="text-xs text-success font-medium mt-1">Pool utilization: 14%</div>
             </CardContent>
           </Card>
         </motion.div>
 
         <motion.div variants={itemVariants}>
-          <Card className="hover:border-primary/50 transition-colors">
+          <Card className="hover:border-success/20 transition-colors shadow-sm">
             <CardHeader className="py-4 pb-2 border-none">
-              <CardTitle className="text-sm text-slate-400 flex items-center justify-between">
+              <CardTitle className="text-sm text-textMuted flex items-center justify-between font-semibold uppercase tracking-wider">
                 WebSocket Gateway
-                <Server className="w-4 h-4 text-emerald-400" />
+                <Server className="w-4 h-4 text-emerald-500" />
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-slate-100">Active</div>
-              <div className="text-xs text-success mt-1">Connections: 4</div>
+              <div className="text-2xl font-bold text-text">Active</div>
+              <div className="text-xs text-success font-medium mt-1">Connections: 4</div>
             </CardContent>
           </Card>
         </motion.div>
         
         <motion.div variants={itemVariants}>
-          <Card className="hover:border-primary/50 transition-colors">
+          <Card className="hover:border-primary/20 transition-colors shadow-sm">
             <CardHeader className="py-4 pb-2 border-none">
-              <CardTitle className="text-sm text-slate-400 flex items-center justify-between">
+              <CardTitle className="text-sm text-textMuted flex items-center justify-between font-semibold uppercase tracking-wider">
                 Overall Status
                 <Activity className="w-4 h-4 text-primary" />
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-success uppercase tracking-wide">Online</div>
-              <div className="text-xs text-slate-400 mt-1">Uptime: 99.9%</div>
+              <div className="text-xs text-textMuted font-medium mt-1">Uptime: 99.9%</div>
             </CardContent>
           </Card>
         </motion.div>

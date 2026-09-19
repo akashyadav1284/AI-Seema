@@ -79,7 +79,7 @@ const AICore = ({ position }) => {
         <meshStandardMaterial color="#c4b5fd" emissive="#8b5cf6" emissiveIntensity={2} toneMapped={false} />
       </Box>
       <Html position={[0, 1.5, 0]} center>
-        <div className="px-2 py-1 bg-black/60 backdrop-blur rounded border border-purple-500/50 text-[10px] text-purple-300 whitespace-nowrap font-mono tracking-widest">
+        <div className="px-2 py-1 bg-white shadow-sm rounded border border-purple-200 text-[10px] text-purple-700 whitespace-nowrap font-mono tracking-widest font-bold">
           AI INFERENCE CORE
         </div>
       </Html>
@@ -107,7 +107,7 @@ const Node = ({ position, label, color, type }) => {
         </Sphere>
       )}
       <Html position={[0, -0.8, 0]} center>
-        <div className="px-1.5 py-0.5 bg-black/40 backdrop-blur rounded text-[9px] text-white/70 whitespace-nowrap border border-white/10">
+        <div className="px-1.5 py-0.5 bg-white shadow-sm rounded text-[10px] text-slate-700 whitespace-nowrap border border-slate-200 font-medium">
           {label}
         </div>
       </Html>
@@ -131,9 +131,8 @@ const Scene = () => {
 
   return (
     <>
-      <ambientLight intensity={0.2} />
+      <ambientLight intensity={0.5} />
       <pointLight position={[0, 5, 0]} intensity={2} color="#ffffff" />
-      <Stars radius={50} depth={50} count={1000} factor={4} saturation={0} fade speed={1} />
       
       {/* Central AI Core */}
       <AICore position={corePos} />
@@ -188,11 +187,9 @@ export default function SecurityTopology3D() {
   }
 
   return (
-    <div className="w-full h-full min-h-[400px] rounded-xl overflow-hidden glass-panel relative cursor-move">
-      <div className="absolute top-4 left-4 z-10 px-3 py-1 bg-black/50 border border-white/10 rounded-md text-[10px] uppercase tracking-widest text-slate-300 backdrop-blur">
-        Interactive Topology
-      </div>
+    <div className="w-full h-full min-h-[400px] rounded-xl overflow-hidden relative cursor-move bg-slate-50">
       <Canvas camera={{ position: [0, 3, 8], fov: 45 }} dpr={[1, 2]} performance={{ min: 0.5 }}>
+        <color attach="background" args={['#f8fafc']} />
         <Suspense fallback={null}>
           <Scene />
         </Suspense>
