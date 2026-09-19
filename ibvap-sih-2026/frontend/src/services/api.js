@@ -64,6 +64,18 @@ export const getHealth = async () => {
 export const getCameras = () => fetchWithAuth('/api/cameras/');
 export const getCamera = (id) => fetchWithAuth(`/api/cameras/${id}`);
 export const addCamera = (data) => fetchWithAuth('/api/cameras/', { method: 'POST', body: JSON.stringify(data) });
+export const updateCamera = (id, data) => fetchWithAuth(`/api/cameras/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+export const deleteCamera = async (id) => {
+  const response = await fetch(`${API_BASE_URL}/api/cameras/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error?.detail || 'Failed to delete camera');
+  }
+  return true; // 204 No Content
+};
 
 // --- EVENTS ---
 export const getEvents = () => fetchWithAuth('/api/events/');

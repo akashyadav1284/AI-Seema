@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getCameras, addCamera as addCameraApi } from '../services/api';
+import { getCameras, addCamera as addCameraApi, updateCamera, deleteCamera } from '../services/api';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -7,8 +7,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Search, Plus, MoreVertical, MapPin, Video, Wifi, WifiOff, Loader2, Play, Settings, Edit, Trash } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { VideoPlayer } from '../components/ui/VideoPlayer';
-import { useDataFusion } from '../hooks/useDataFusion';
-import { useSimulation } from '../contexts/SimulationContext';
 
 const Cameras = () => {
   const [camerasData, setCamerasData] = useState([]);
@@ -20,8 +18,6 @@ const Cameras = () => {
   const [availableDevices, setAvailableDevices] = useState([]);
   const [activeCamera, setActiveCamera] = useState(null);
   const [cameraEvents, setCameraEvents] = useState([]);
-
-  const { isDemoMode, addCamera, updateCamera, deleteCamera } = useSimulation();
 
   useEffect(() => {
     let unsubscribe = () => {};
@@ -73,21 +69,10 @@ const Cameras = () => {
   }, [isModalOpen]);
 
   const handleAddCamera = async () => {
-    if (isDemoMode) {
-      if (isEditMode) {
-        updateCamera(newCamera.id, newCamera);
-      } else {
-        addCamera(newCamera);
-      }
-      setIsModalOpen(false);
-      resetModal();
-      return;
-    }
-
     try {
       if (isEditMode) {
-        // Mocking API update if it doesn't exist
-        alert("Real API update not implemented yet.");
+        const updatedCamera = await updateCamera(newCamera.camera_id || newCamera.id, newCamera);
+        setCamerasData(camerasData.map(cam => (cam.camera_id === updatedCamera.camera_id || cam.id === updatedCamera.id) ? updatedCamera : cam));
       } else {
         const addedCamera = await addCameraApi(newCamera);
         setCamerasData([...camerasData, { ...addedCamera, status: 'online', location: 'Local', capabilities: ['Standard'] }]);
@@ -96,7 +81,7 @@ const Cameras = () => {
       resetModal();
     } catch (e) {
       console.error(e);
-      alert(e.message || "Failed to add camera");
+      alert(e.message || "Failed to save camera");
     }
   };
 
@@ -106,12 +91,14 @@ const Cameras = () => {
     setIsModalOpen(true);
   };
 
-  const handleDeleteCamera = (id) => {
+  const handleDeleteCamera = async (id) => {
     if (confirm("Are you sure you want to delete this camera?")) {
-      if (isDemoMode) {
-        deleteCamera(id);
-      } else {
-        alert("Real API delete not implemented yet.");
+      try {
+        await deleteCamera(id);
+        setCamerasData(camerasData.filter(cam => cam.camera_id !== id && cam.id !== id));
+      } catch (e) {
+        console.error(e);
+        alert(e.message || "Failed to delete camera");
       }
     }
   };
@@ -137,7 +124,7 @@ const Cameras = () => {
     fetchCameras();
   }, []);
 
-  const fusedCameras = useDataFusion(camerasData, 'cameras');
+  const fusedCameras = camerasData;
 
   const filteredCameras = fusedCameras.filter(cam => 
     cam.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -172,12 +159,11 @@ const Cameras = () => {
           </div>
           <div className="hidden sm:flex text-sm font-medium text-textMuted flex-col items-end">
             {fusedCameras.length} Total Cameras
-            {isDemoMode && <span className="text-xs text-primary font-bold">DEMO DATA ACTIVE</span>}
           </div>
         </div>
         
         <CardContent className="flex-1 overflow-auto p-0 bg-white">
-          {isLoading && !isDemoMode ? (
+          {isLoading ? (
             <div className="h-full flex flex-col items-center justify-center text-textMuted">
               <Loader2 className="w-8 h-8 animate-spin mb-4 text-primary" />
               <p>Loading camera network...</p>
@@ -213,7 +199,6 @@ const Cameras = () => {
                       <div className="flex items-center gap-2">
                         <Video className="w-4 h-4 text-textMuted" />
                         {cam.name}
-                        {cam._isSimulated && <span className="text-[10px] bg-blue-100 text-blue-800 px-1 py-0.5 rounded ml-1">DEMO</span>}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -242,7 +227,7 @@ const Cameras = () => {
                         <Button variant="ghost" className="p-2 h-8 w-8 text-textMuted hover:bg-slate-100" onClick={() => handleEditCamera(cam)} title="Edit">
                           <Edit className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" className="p-2 h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDeleteCamera(cam.id)} title="Delete">
+                        <Button variant="ghost" className="p-2 h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDeleteCamera(cam.camera_id || cam.id)} title="Delete">
                           <Trash className="w-4 h-4" />
                         </Button>
                       </div>
