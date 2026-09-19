@@ -7,6 +7,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { getAlerts, acknowledgeAlert, resolveAlert } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/Button';
+import { useDataFusion } from '../hooks/useDataFusion';
+import { useSimulation } from '../contexts/SimulationContext';
 
 const Alerts = () => {
   const [alerts, setAlerts] = useState([]);
@@ -69,9 +71,15 @@ const Alerts = () => {
     };
   }, []);
 
+  const { acknowledgeAlert: simAck, resolveAlert: simRes } = useSimulation();
+
   const handleAcknowledge = async (alertId) => {
     try {
-      await acknowledgeAlert(alertId);
+      if (alertId.toString().startsWith('ALT-')) {
+        simAck(alertId);
+      } else {
+        await acknowledgeAlert(alertId);
+      }
       await fetchAlertsData();
     } catch (err) {
       console.error('Failed to acknowledge alert', err);
@@ -81,7 +89,11 @@ const Alerts = () => {
 
   const handleResolve = async (alertId) => {
     try {
-      await resolveAlert(alertId, "Resolved by user");
+      if (alertId.toString().startsWith('ALT-')) {
+        simRes(alertId);
+      } else {
+        await resolveAlert(alertId, "Resolved by user");
+      }
       await fetchAlertsData();
     } catch (err) {
       console.error('Failed to resolve alert', err);
@@ -89,7 +101,9 @@ const Alerts = () => {
     }
   };
 
-  const filteredAlerts = alerts.filter(a => {
+  const fusedAlerts = useDataFusion(alerts, 'alerts');
+
+  const filteredAlerts = fusedAlerts.filter(a => {
     if (filter === 'all') return true;
     return a.severity === filter;
   });
@@ -150,9 +164,12 @@ const Alerts = () => {
               </TableHeader>
               <TableBody>
                 <AnimatePresence>
-                  {filteredAlerts.map((alert) => (
+                  {filteredAlerts.map((alert) => {
+                    const a_id = alert.alert_id || alert.id;
+                    const a_created_at = alert.created_at ? alert.created_at * 1000 : alert.timestamp;
+                    return (
                     <motion.tr 
-                      key={alert.alert_id}
+                      key={a_id}
                       initial={{ opacity: 0, backgroundColor: '#f1f5f9' }}
                       animate={{ opacity: 1, backgroundColor: 'transparent' }}
                       layout
@@ -162,10 +179,10 @@ const Alerts = () => {
                         <div className={`w-2 h-2 rounded-full ${alert.severity === 'HIGH' ? 'bg-danger animate-pulse' : alert.severity === 'MEDIUM' ? 'bg-warning' : 'bg-primary'}`}></div>
                       </TableCell>
                       <TableCell className="text-textMuted font-mono text-xs">
-                        {new Date(alert.created_at * 1000).toLocaleString()}
+                        {a_created_at ? new Date(a_created_at).toLocaleString() : 'N/A'}
                       </TableCell>
                       <TableCell className="font-semibold text-text tracking-wide uppercase text-xs">
-                        {alert.alert_type}
+                        {alert.alert_type || alert.type}
                       </TableCell>
                       <TableCell>
                         <Badge variant={alert.severity === 'HIGH' ? 'danger' : alert.severity === 'MEDIUM' ? 'warning' : 'info'}>
@@ -195,7 +212,7 @@ const Alerts = () => {
                             <Button 
                               size="sm" 
                               variant="secondary" 
-                              onClick={() => handleAcknowledge(alert.alert_id)}
+                              onClick={() => handleAcknowledge(a_id)}
                               disabled={!canActionAlert}
                             >
                               <Check className="w-4 h-4 mr-1" /> Ack
@@ -205,7 +222,7 @@ const Alerts = () => {
                             <Button 
                               size="sm" 
                               variant="primary"
-                              onClick={() => handleResolve(alert.alert_id)}
+                              onClick={() => handleResolve(a_id)}
                               disabled={!canActionAlert}
                             >
                               <X className="w-4 h-4 mr-1" /> Resolve
@@ -214,7 +231,8 @@ const Alerts = () => {
                         </div>
                       </TableCell>
                     </motion.tr>
-                  ))}
+                    );
+                  })}
                 </AnimatePresence>
               </TableBody>
             </Table>

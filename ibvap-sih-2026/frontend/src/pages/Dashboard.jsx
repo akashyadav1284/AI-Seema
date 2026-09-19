@@ -6,6 +6,8 @@ import { Camera, AlertTriangle, ShieldCheck, Activity, Target, Crosshair, Eye, U
 import AnimatedMap from '../components/ui/AnimatedMap';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
+import { useDataFusion } from '../hooks/useDataFusion';
+import { useSimulation } from '../contexts/SimulationContext';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -32,6 +34,11 @@ const Dashboard = () => {
 
   const [cameras, setCameras] = useState([]);
   const [recentEvents, setRecentEvents] = useState([]);
+  const { systemHealth, events: simEvents, tracks: simTracks, alerts: simAlerts, isDemoMode } = useSimulation();
+
+  const fusedCameras = useDataFusion(cameras, 'cameras');
+  const fusedEvents = useDataFusion(recentEvents, 'events');
+  const fusedAlerts = useDataFusion([], 'alerts'); // Real alerts aren't fetched here directly, but we have simAlerts
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -47,14 +54,15 @@ const Dashboard = () => {
         const camList = camData.items || [];
         setCameras(camList);
         
-        setStats({
+        setStats(prev => ({
+          ...prev,
           totalCameras: summary.total_cameras || camList.length,
           onlineCameras: summary.active_cameras || camList.filter(c => c.status === 'active' || c.status === 'online').length,
           activeAlerts: summary.unresolved_alerts || 0,
           eventsToday: summary.total_events || evtData.total || 0,
-          liveDetections: Math.floor(Math.random() * 50) + 10, // Mock for visual
-          trackedObjects: Math.floor(Math.random() * 20) + 5 // Mock for visual
-        });
+          liveDetections: Math.floor(Math.random() * 50) + 10,
+          trackedObjects: Math.floor(Math.random() * 20) + 5
+        }));
 
         setRecentEvents((evtData.items || []).slice(0, 8));
       } catch (error) {
@@ -100,7 +108,17 @@ const Dashboard = () => {
     });
   }, []);
 
-  const activeAlertEvents = recentEvents.filter(e => e.severity === 'critical' || e.severity === 'warning' || e.severity === 'HIGH');
+  // Compute final stats using fused data if available
+  const displayStats = {
+    totalCameras: isDemoMode ? fusedCameras.length : stats.totalCameras,
+    onlineCameras: isDemoMode ? fusedCameras.filter(c => c.status === 'ONLINE' || c.status === 'online').length : stats.onlineCameras,
+    activeAlerts: isDemoMode ? fusedAlerts.filter(a => a.status !== 'RESOLVED').length : stats.activeAlerts,
+    eventsToday: isDemoMode ? fusedEvents.length : stats.eventsToday,
+    liveDetections: isDemoMode ? simTracks.length * 2 : stats.liveDetections,
+    trackedObjects: isDemoMode ? simTracks.length : stats.trackedObjects
+  };
+
+  const activeAlertEvents = fusedEvents.filter(e => e.severity === 'critical' || e.severity === 'warning' || e.severity === 'HIGH');
 
   return (
     <motion.div 
@@ -115,8 +133,8 @@ const Dashboard = () => {
           <p className="text-textMuted text-sm mt-1">Border Surveillance & Threat Analysis</p>
         </div>
         <div className="flex items-center gap-4">
-          <Badge variant={stats.activeAlerts > 0 ? "danger" : "success"} className="px-3 py-1 text-sm shadow-sm">
-            {stats.activeAlerts > 0 ? `${stats.activeAlerts} ACTIVE INCIDENTS` : "NO CRITICAL INCIDENTS"}
+          <Badge variant={displayStats.activeAlerts > 0 ? "danger" : "success"} className="px-3 py-1 text-sm shadow-sm">
+            {displayStats.activeAlerts > 0 ? `${displayStats.activeAlerts} ACTIVE INCIDENTS` : "NO CRITICAL INCIDENTS"}
           </Badge>
         </div>
       </motion.div>
@@ -130,8 +148,8 @@ const Dashboard = () => {
             </div>
             <p className="text-xs font-semibold text-textMuted uppercase tracking-wider">Cameras</p>
             <div className="mt-2 flex items-baseline gap-2">
-              <p className="text-3xl font-bold text-text">{stats.onlineCameras}</p>
-              <p className="text-sm font-medium text-textMuted">/ {stats.totalCameras}</p>
+              <p className="text-3xl font-bold text-text">{displayStats.onlineCameras}</p>
+              <p className="text-sm font-medium text-textMuted">/ {displayStats.totalCameras}</p>
             </div>
           </CardContent>
         </Card>
@@ -143,7 +161,7 @@ const Dashboard = () => {
             </div>
             <p className="text-xs font-semibold text-info uppercase tracking-wider">Live Detections</p>
             <div className="mt-2 flex items-baseline gap-2">
-              <p className="text-3xl font-bold text-text">{stats.liveDetections}</p>
+              <p className="text-3xl font-bold text-text">{displayStats.liveDetections}</p>
             </div>
           </CardContent>
         </Card>
@@ -155,19 +173,19 @@ const Dashboard = () => {
             </div>
             <p className="text-xs font-semibold text-textMuted uppercase tracking-wider">Tracked Objects</p>
             <div className="mt-2 flex items-baseline gap-2">
-              <p className="text-3xl font-bold text-text">{stats.trackedObjects}</p>
+              <p className="text-3xl font-bold text-text">{displayStats.trackedObjects}</p>
             </div>
           </CardContent>
         </Card>
         
-        <Card className={cn("transition-colors", stats.activeAlerts > 0 ? "border-danger/40 bg-danger/5" : "hover:border-danger/20")}>
+        <Card className={cn("transition-colors", displayStats.activeAlerts > 0 ? "border-danger/40 bg-danger/5" : "hover:border-danger/20")}>
           <CardContent className="p-4 flex flex-col justify-between h-full relative overflow-hidden">
             <div className="absolute right-0 top-0 p-4 opacity-10 text-danger">
               <AlertTriangle className="w-16 h-16" />
             </div>
             <p className="text-xs font-semibold text-danger uppercase tracking-wider">Active Alerts</p>
             <div className="mt-2 flex items-baseline gap-2">
-              <p className="text-3xl font-bold text-danger">{stats.activeAlerts}</p>
+              <p className="text-3xl font-bold text-danger">{displayStats.activeAlerts}</p>
             </div>
           </CardContent>
         </Card>
@@ -179,7 +197,7 @@ const Dashboard = () => {
             </div>
             <p className="text-xs font-semibold text-textMuted uppercase tracking-wider">Events (24h)</p>
             <div className="mt-2 flex items-baseline gap-2">
-              <p className="text-3xl font-bold text-text">{stats.eventsToday}</p>
+              <p className="text-3xl font-bold text-text">{displayStats.eventsToday}</p>
             </div>
           </CardContent>
         </Card>
@@ -205,7 +223,7 @@ const Dashboard = () => {
           <div className="flex-1 min-h-[400px] relative rounded-lg overflow-hidden shadow-sm border border-border bg-slate-50 flex items-center justify-center">
              <div className="absolute inset-0">
                {/* Map placeholder or component */}
-               <AnimatedMap cameras={cameras} activeAlerts={activeAlertEvents} />
+               <AnimatedMap cameras={fusedCameras} activeAlerts={activeAlertEvents} tracks={isDemoMode ? simTracks : []} />
              </div>
              {/* Overlay UI for Map */}
              <div className="absolute top-4 right-4 bg-surface p-2 rounded-md shadow-md border border-border flex flex-col gap-2">
@@ -225,12 +243,18 @@ const Dashboard = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="flex-1 overflow-auto p-4 custom-scrollbar bg-white">
-              {recentEvents.length > 0 ? (
+              {fusedEvents.length > 0 ? (
                 <div className="space-y-4 relative before:absolute before:inset-y-0 before:left-[11px] before:w-0.5 before:bg-slate-200">
                   <AnimatePresence initial={false}>
-                    {recentEvents.map((evt) => (
+                    {fusedEvents.slice(0, 8).map((evt) => {
+                      const e_id = evt.event_id || evt.id || (evt.timestamp + evt.event_type);
+                      const e_timestamp = evt.timestamp 
+                        ? (typeof evt.timestamp === 'string' ? new Date(evt.timestamp) : new Date(evt.timestamp * 1000))
+                        : new Date();
+                      
+                      return (
                       <motion.div 
-                        key={evt.event_id || evt._id || evt.id || (evt.timestamp + evt.event_type)} 
+                        key={e_id} 
                         layout
                         initial={{ opacity: 0, x: -20, height: 0, marginBottom: 0 }}
                         animate={{ opacity: 1, x: 0, height: 'auto', marginBottom: 16 }}
@@ -243,10 +267,10 @@ const Dashboard = () => {
                         <div className="bg-slate-50 border border-slate-100 p-3 rounded-md hover:bg-slate-100 transition-colors overflow-hidden shadow-sm">
                           <div className="flex justify-between items-start mb-1">
                             <span className="text-xs font-bold text-text uppercase tracking-wide">{evt.event_type || evt.type}</span>
-                            <span className="text-[10px] text-textMuted font-mono">{new Date(evt.timestamp * 1000 || Date.now()).toLocaleTimeString()}</span>
+                            <span className="text-[10px] text-textMuted font-mono">{e_timestamp.toLocaleTimeString()}</span>
                           </div>
                           <div className="text-xs text-textMuted font-medium">
-                            {evt.camera_id || evt.camera_name || 'CAM_UNKNOWN'}
+                            {evt.camera_id || evt.camera || evt.camera_name || 'CAM_UNKNOWN'}
                           </div>
                           {(evt.severity === 'critical' || evt.severity === 'HIGH') && (
                             <div className="mt-2 text-[10px] text-danger font-bold bg-danger/10 border border-danger/20 px-2 py-1 rounded inline-block">
@@ -255,7 +279,7 @@ const Dashboard = () => {
                           )}
                         </div>
                       </motion.div>
-                    ))}
+                    )})}
                   </AnimatePresence>
                 </div>
               ) : (

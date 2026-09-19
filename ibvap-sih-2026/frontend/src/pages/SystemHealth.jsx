@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import { Activity, Server, Database, Cpu } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import SecurityTopology3D from '../components/ui/SecurityTopology3D';
+import { useSimulation } from '../contexts/SimulationContext';
+import { cn } from '../lib/utils';
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -10,6 +12,8 @@ const itemVariants = {
 };
 
 const SystemHealth = () => {
+  const { systemHealth } = useSimulation();
+
   return (
     <motion.div 
       initial="hidden"
@@ -33,64 +37,111 @@ const SystemHealth = () => {
 
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        {/* Core Infrastructure */}
         <motion.div variants={itemVariants}>
-          <Card className="hover:border-primary/20 transition-colors shadow-sm">
+          <Card className="hover:border-primary/20 transition-colors shadow-sm bg-white border-border">
             <CardHeader className="py-4 pb-2 border-none">
               <CardTitle className="text-sm text-textMuted flex items-center justify-between font-semibold uppercase tracking-wider">
-                AI Inference Engine
-                <Cpu className="w-4 h-4 text-purple-600" />
+                System CPU
+                <Cpu className="w-4 h-4 text-primary" />
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-text">Optimal</div>
-              <div className="text-xs text-success font-medium mt-1">Latency: 12ms</div>
+              <div className="flex items-end gap-2">
+                <div className="text-3xl font-bold text-text">{systemHealth.cpu?.toFixed(1) || '0'}%</div>
+              </div>
+              <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3 overflow-hidden">
+                <div className={cn("h-full rounded-full transition-all duration-1000", systemHealth.cpu > 80 ? 'bg-danger' : systemHealth.cpu > 60 ? 'bg-warning' : 'bg-primary')} style={{ width: `${systemHealth.cpu}%` }}></div>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
 
         <motion.div variants={itemVariants}>
-          <Card className="hover:border-info/20 transition-colors shadow-sm">
+          <Card className="hover:border-info/20 transition-colors shadow-sm bg-white border-border">
             <CardHeader className="py-4 pb-2 border-none">
               <CardTitle className="text-sm text-textMuted flex items-center justify-between font-semibold uppercase tracking-wider">
-                Database Node
+                System Memory
                 <Database className="w-4 h-4 text-info" />
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-text">Connected</div>
-              <div className="text-xs text-success font-medium mt-1">Pool utilization: 14%</div>
+              <div className="flex items-end gap-2">
+                <div className="text-3xl font-bold text-text">{systemHealth.memory?.toFixed(1) || '0'}%</div>
+              </div>
+              <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3 overflow-hidden">
+                <div className={cn("h-full rounded-full transition-all duration-1000", systemHealth.memory > 85 ? 'bg-danger' : 'bg-info')} style={{ width: `${systemHealth.memory}%` }}></div>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
 
         <motion.div variants={itemVariants}>
-          <Card className="hover:border-success/20 transition-colors shadow-sm">
+          <Card className="hover:border-purple-500/20 transition-colors shadow-sm bg-white border-border">
             <CardHeader className="py-4 pb-2 border-none">
               <CardTitle className="text-sm text-textMuted flex items-center justify-between font-semibold uppercase tracking-wider">
-                WebSocket Gateway
+                Detection FPS (Avg)
+                <Activity className="w-4 h-4 text-purple-600" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-text">{systemHealth.detectionFps?.toFixed(1) || '0.0'}</div>
+              <div className="text-xs text-textMuted font-medium mt-1">Across all inference nodes</div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div variants={itemVariants}>
+          <Card className="hover:border-success/20 transition-colors shadow-sm bg-white border-border">
+            <CardHeader className="py-4 pb-2 border-none">
+              <CardTitle className="text-sm text-textMuted flex items-center justify-between font-semibold uppercase tracking-wider">
+                Network Latency
                 <Server className="w-4 h-4 text-emerald-500" />
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-text">Active</div>
-              <div className="text-xs text-success font-medium mt-1">Connections: 4</div>
+              <div className="text-3xl font-bold text-text">{systemHealth.latency?.toFixed(0) || '0'} <span className="text-sm text-textMuted">ms</span></div>
+              <div className="text-xs text-textMuted font-medium mt-1">WebSocket Gateway</div>
             </CardContent>
           </Card>
         </motion.div>
         
-        <motion.div variants={itemVariants}>
-          <Card className="hover:border-primary/20 transition-colors shadow-sm">
-            <CardHeader className="py-4 pb-2 border-none">
-              <CardTitle className="text-sm text-textMuted flex items-center justify-between font-semibold uppercase tracking-wider">
-                Overall Status
-                <Activity className="w-4 h-4 text-primary" />
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-success uppercase tracking-wide">Online</div>
-              <div className="text-xs text-textMuted font-medium mt-1">Uptime: 99.9%</div>
-            </CardContent>
-          </Card>
+        {/* Services Status */}
+        <motion.div variants={itemVariants} className="lg:col-span-4 mt-2">
+          <div className="bg-white border border-border rounded-xl p-4 shadow-sm flex flex-wrap gap-6 justify-between items-center">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-success animate-pulse"></div>
+              <div>
+                <div className="text-xs text-textMuted uppercase font-bold tracking-wider">API Core</div>
+                <div className="text-sm font-semibold text-text">Online (99.98%)</div>
+              </div>
+            </div>
+            <div className="w-px h-8 bg-border hidden sm:block"></div>
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-success animate-pulse"></div>
+              <div>
+                <div className="text-xs text-textMuted uppercase font-bold tracking-wider">Database Node</div>
+                <div className="text-sm font-semibold text-text">Connected</div>
+              </div>
+            </div>
+            <div className="w-px h-8 bg-border hidden sm:block"></div>
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-success animate-pulse"></div>
+              <div>
+                <div className="text-xs text-textMuted uppercase font-bold tracking-wider">Active Clients</div>
+                <div className="text-sm font-semibold text-text">{systemHealth.clients} Sessions</div>
+              </div>
+            </div>
+            <div className="w-px h-8 bg-border hidden sm:block"></div>
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-primary/50"></div>
+              <div>
+                <div className="text-xs text-textMuted uppercase font-bold tracking-wider">Uptime</div>
+                <div className="text-sm font-semibold text-text font-mono">{systemHealth.uptime || '14d 6h'}</div>
+              </div>
+            </div>
+          </div>
         </motion.div>
       </div>
 

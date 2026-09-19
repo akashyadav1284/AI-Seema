@@ -1,112 +1,25 @@
 import { useState, useEffect } from 'react';
-import { getEvents, fetchEvidenceBlob } from '../services/api';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { Image as ImageIcon, Video, Search, Download, Calendar, Loader2, ExternalLink } from 'lucide-react';
-
-const SecureMedia = ({ filename, type = 'snapshot', alt, className }) => {
-  const [blobUrl, setBlobUrl] = useState(null);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    let url = null;
-    if (filename) {
-      fetchEvidenceBlob(filename, type)
-        .then(blob => {
-          url = URL.createObjectURL(blob);
-          setBlobUrl(url);
-        })
-        .catch(err => {
-          console.error("Failed to fetch media blob", err);
-          setError(true);
-        });
-    }
-    return () => {
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [filename, type]);
-
-  if (error) {
-    if (type === 'clip') {
-      return (
-        <div className={`${className} flex flex-col items-center justify-center bg-slate-100`}>
-          <Video className="w-12 h-12 text-slate-300 mb-2" />
-          <span className="text-textMuted text-sm font-medium">Media Not Found</span>
-        </div>
-      );
-    }
-    return <div className={`${className} flex flex-col items-center justify-center bg-slate-100`}>
-       <ImageIcon className="w-12 h-12 text-slate-300 mb-2" />
-       <span className="text-textMuted text-sm font-medium">Image Not Found</span>
-    </div>;
-  }
-
-  if (!blobUrl) {
-    return (
-      <div className={`${className} flex flex-col items-center justify-center bg-slate-50`}>
-         <Loader2 className="w-6 h-6 animate-spin text-primary mb-2" />
-         <span className="text-xs text-textMuted font-medium">Loading Media...</span>
-      </div>
-    );
-  }
-
-  if (type === 'clip') {
-    return (
-      <video 
-        src={blobUrl} 
-        controls 
-        autoPlay 
-        loop 
-        muted 
-        className={className} 
-      />
-    );
-  }
-
-  return <img src={blobUrl} alt={alt} className={className} />;
-};
+import { Badge } from '../components/ui/Badge';
+import { Image as ImageIcon, Video, Search, Download, Calendar, Loader2, ExternalLink, Camera } from 'lucide-react';
+import { useSimulation } from '../contexts/SimulationContext';
+import { cn } from '../lib/utils';
+import { EventDrawer } from '../components/ui/EventDrawer';
 
 const Evidence = () => {
-  const [evidenceItems, setEvidenceItems] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { evidence, events, cameras, isDemoMode } = useSimulation();
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [selectedEvent, setSelectedEvent] = useState(null);
 
-  useEffect(() => {
-    const fetchEvidenceData = async () => {
-      setIsLoading(true);
-      try {
-        const eventsData = await getEvents();
-        const eventsWithEvidence = (eventsData.items || []).filter(e => e.evidence);
-        
-        const items = eventsWithEvidence.map(e => {
-          const filename = typeof e.evidence === 'string' ? e.evidence : e.evidence.filename || e.evidence.url?.split('/').pop();
-          return {
-            id: e.event_id || e.id,
-            eventId: e.event_id || e.id,
-            type: e.evidence?.type || 'snapshot',
-            filename: filename,
-            timestamp: e.timestamp,
-            camera: e.camera_id,
-            event_type: e.event_type,
-            severity: e.severity
-          };
-        });
-        setEvidenceItems(items);
-      } catch (error) {
-        console.error("Failed to load evidence", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const filteredItems = evidence.filter(item => {
+    const cam = cameras.find(c => c.id === item.camera);
+    const evt = events.find(e => (e.id || e.event_id) === item.eventId);
+    const matchStr = `${item.camera} ${cam?.name || ''} ${evt?.type || ''}`.toLowerCase();
     
-    fetchEvidenceData();
-  }, []);
-
-  const filteredItems = evidenceItems.filter(item => {
-    const matchesSearch = item.camera?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          item.event_type?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = typeFilter === 'all' || item.type === typeFilter;
+    const matchesSearch = matchStr.includes(searchQuery.toLowerCase());
+    const matchesType = typeFilter === 'all' || item.type.toLowerCase().includes(typeFilter);
     return matchesSearch && matchesType;
   });
 
@@ -151,8 +64,8 @@ const Evidence = () => {
             <ImageIcon className="w-4 h-4" /> Snapshots
           </button>
           <button 
-            onClick={() => setTypeFilter('clip')}
-            className={`px-3 py-1.5 rounded-md text-sm transition-colors flex items-center gap-2 font-medium ${typeFilter === 'clip' ? 'bg-white text-primary shadow-sm' : 'text-textMuted hover:text-text'}`}
+            onClick={() => setTypeFilter('video')}
+            className={`px-3 py-1.5 rounded-md text-sm transition-colors flex items-center gap-2 font-medium ${typeFilter === 'video' ? 'bg-white text-primary shadow-sm' : 'text-textMuted hover:text-text'}`}
           >
             <Video className="w-4 h-4" /> Clips
           </button>
@@ -160,69 +73,104 @@ const Evidence = () => {
       </div>
       
       <div className="flex-1 overflow-auto custom-scrollbar">
-        {isLoading ? (
-          <div className="h-full flex flex-col items-center justify-center text-textMuted">
-            <Loader2 className="w-8 h-8 animate-spin mb-4 text-primary" />
-            <p>Loading evidence vault...</p>
-          </div>
-        ) : filteredItems.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pb-6">
-            {filteredItems.map(item => (
-              <Card key={item.id} className="overflow-hidden group hover:border-primary/50 transition-colors shadow-sm bg-white border-border">
-                <div className="aspect-video relative bg-slate-100 flex items-center justify-center overflow-hidden border-b border-border">
-                   {item.filename ? (
-                     <SecureMedia 
-                       filename={item.filename}
-                       type={item.type}
-                       alt="Evidence" 
-                       className="w-full h-full object-contain"
-                     />
-                   ) : (
-                     <div className="w-full h-full flex items-center justify-center bg-slate-100">
-                       <Video className="w-12 h-12 text-slate-300" />
-                     </div>
-                   )}
-                   <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
-                     <Button variant="secondary" className="gap-2 bg-white text-text hover:bg-slate-100">
-                       <ExternalLink className="w-4 h-4" /> View Full
-                     </Button>
-                     <Button variant="primary" className="gap-2">
-                       <Download className="w-4 h-4" /> Save
-                     </Button>
-                   </div>
-                   <div className="absolute top-2 left-2 flex gap-2">
-                     <span className={`px-2 py-1 rounded text-xs font-bold text-white shadow-sm ${item.severity === 'critical' ? 'bg-danger' : item.severity === 'warning' ? 'bg-warning' : 'bg-primary'}`}>
-                       {item.event_type}
-                     </span>
-                     <span className="px-2 py-1 rounded bg-white text-textMuted text-xs shadow-sm border border-border font-medium">
-                       {item.type === 'snapshot' ? <ImageIcon className="w-3 h-3 inline" /> : <Video className="w-3 h-3 inline" />}
-                     </span>
-                   </div>
-                </div>
-                <CardContent className="p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <p className="font-semibold text-text">{item.camera || 'Unknown Camera'}</p>
-                      <p className="text-xs text-textMuted font-mono mt-1">{new Date(item.timestamp * 1000).toLocaleString()}</p>
+        {filteredItems.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-6">
+            {filteredItems.map(item => {
+              const cam = cameras.find(c => c.id === item.camera);
+              const evt = events.find(e => (e.id || e.event_id) === item.eventId);
+              const e_timestamp = new Date(item.timestamp);
+              const isVideo = item.type === 'VIDEO_CLIP';
+
+              return (
+                <Card key={item.id} className="overflow-hidden group hover:border-primary/50 transition-colors shadow-sm bg-white border-border">
+                  <div className="aspect-video relative bg-slate-100 flex items-center justify-center overflow-hidden border-b border-border">
+                    {/* Mock Media Display */}
+                    <div className="w-full h-full bg-slate-800 flex items-center justify-center relative overflow-hidden">
+                      {isDemoMode ? (
+                        <>
+                          <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] mix-blend-overlay"></div>
+                          <div className="absolute top-2 right-2 flex gap-1">
+                            <span className="text-[9px] font-mono text-white/70 bg-black/50 px-1 rounded">{e_timestamp.toLocaleTimeString()}</span>
+                            <span className="text-[9px] font-mono text-white/70 bg-black/50 px-1 rounded">{cam?.name}</span>
+                          </div>
+                          {isVideo ? (
+                            <Video className="w-12 h-12 text-slate-500" />
+                          ) : (
+                            <ImageIcon className="w-12 h-12 text-slate-500" />
+                          )}
+                        </>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-slate-100">
+                           <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
+                        </div>
+                      )}
                     </div>
-                    <Button variant="ghost" size="sm" className="text-primary h-8 px-2 font-medium hover:bg-slate-50">
-                       Event Detail
-                    </Button>
+                    
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                      <Button variant="secondary" className="gap-2 bg-white text-text hover:bg-slate-100" onClick={() => setSelectedEvent(evt)}>
+                        <ExternalLink className="w-4 h-4" /> View Details
+                      </Button>
+                      <Button variant="primary" className="gap-2">
+                        <Download className="w-4 h-4" /> Save
+                      </Button>
+                    </div>
+                    
+                    <div className="absolute top-2 left-2 flex gap-2">
+                      <span className={cn(
+                        "px-2 py-1 rounded text-[10px] font-bold text-white shadow-sm tracking-wider uppercase",
+                        item.severity === 'CRITICAL' ? 'bg-danger' : item.severity === 'HIGH' ? 'bg-danger/90' : item.severity === 'MEDIUM' ? 'bg-warning' : 'bg-info'
+                      )}>
+                        {evt?.type || 'EVENT'}
+                      </span>
+                      <span className="px-2 py-1 rounded bg-black/50 text-white text-xs shadow-sm border border-white/10 font-medium">
+                        {!isVideo ? <ImageIcon className="w-3 h-3 inline" /> : <Video className="w-3 h-3 inline" />}
+                      </span>
+                    </div>
+
+                    {isVideo && (
+                      <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] font-mono px-1.5 rounded">
+                        {item.duration || '00:15'}
+                      </div>
+                    )}
                   </div>
-                </CardContent>
-              </Card>
-            ))}
+                  
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-start">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1.5 text-sm font-semibold text-text">
+                          <Camera className="w-4 h-4 text-textMuted" />
+                          {cam?.name || item.camera}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-textMuted font-mono">{e_timestamp.toLocaleString()}</span>
+                          <span className="text-[10px] text-textMuted bg-slate-100 px-1.5 py-0.5 rounded font-mono">{item.size || '2.4 MB'}</span>
+                        </div>
+                      </div>
+                      <Button variant="ghost" size="sm" className="text-primary h-8 px-2 font-medium hover:bg-slate-50" onClick={() => setSelectedEvent(evt)}>
+                         Event Info
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         ) : (
           <div className="h-full flex flex-col items-center justify-center text-textMuted space-y-4">
             <ImageIcon className="w-12 h-12 text-slate-300" />
             <div className="text-center">
               <p className="text-text font-semibold">No evidence found</p>
-              <p className="text-sm mt-1">Adjust filters or date range.</p>
+              <p className="text-sm mt-1">Adjust filters or search query.</p>
             </div>
           </div>
         )}
       </div>
+
+      <EventDrawer 
+        event={selectedEvent} 
+        isOpen={!!selectedEvent} 
+        onClose={() => setSelectedEvent(null)} 
+      />
     </div>
   );
 };

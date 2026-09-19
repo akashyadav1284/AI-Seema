@@ -11,13 +11,17 @@ import {
 import { cn } from '../lib/utils';
 import { Badge } from './ui/Badge';
 import { useAuth } from '../contexts/AuthContext';
+import { useSimulation } from '../contexts/SimulationContext';
+import { CommandPalette } from './ui/CommandPalette';
+
+import { NotificationCenter } from './ui/NotificationCenter';
+
 const navCategories = [
   {
     title: "Command Center",
     items: [
       { to: "/", label: "Overview", icon: LayoutDashboard },
       { to: "/live", label: "Live Monitoring", icon: MonitorPlay },
-      // Mock route for Live Map and Situation Room to fit the new spec UI
       { to: "/live-map", label: "Live Map", icon: Map },
     ]
   },
@@ -32,9 +36,9 @@ const navCategories = [
   {
     title: "Incidents",
     items: [
-      { to: "/alerts", label: "Alerts", icon: Bell, badge: 3 },
-      { to: "/events", label: "Events", icon: History },
-      { to: "/evidence", label: "Evidence Vault", icon: Database },
+      { id: 'alerts', to: "/alerts", label: "Alerts", icon: Bell },
+      { id: 'events', to: "/events", label: "Events", icon: History },
+      { id: 'evidence', to: "/evidence", label: "Evidence Vault", icon: Database },
     ]
   },
   {
@@ -53,9 +57,10 @@ const navCategories = [
   }
 ];
 
-const SidebarItem = ({ item, isExpanded, setMobileOpen }) => {
+const SidebarItem = ({ item, isExpanded, setMobileOpen, dynamicBadge }) => {
   const location = useLocation();
   const isActive = location.pathname === item.to;
+  const displayBadge = dynamicBadge !== undefined ? dynamicBadge : item.badge;
 
   return (
     <div className="relative group">
@@ -88,9 +93,9 @@ const SidebarItem = ({ item, isExpanded, setMobileOpen }) => {
                 className="flex-1 whitespace-nowrap overflow-hidden flex items-center justify-between"
               >
                 <span className="text-sm">{item.label}</span>
-                {item.badge && (
+                {displayBadge > 0 && (
                   <Badge variant="danger" className="rounded-full px-1.5 py-0 min-w-[20px] text-center ml-2">
-                    {item.badge}
+                    {displayBadge}
                   </Badge>
                 )}
               </motion.div>
@@ -102,8 +107,8 @@ const SidebarItem = ({ item, isExpanded, setMobileOpen }) => {
       {!isExpanded && (
         <div className="absolute left-full ml-4 top-1/2 -translate-y-1/2 px-2 py-1 bg-surface border border-border text-text text-xs rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 pointer-events-none shadow-premium flex items-center gap-2">
           {item.label}
-          {item.badge && (
-             <span className="bg-danger text-white px-1.5 rounded-full text-[10px]">{item.badge}</span>
+          {displayBadge > 0 && (
+             <span className="bg-danger text-white px-1.5 rounded-full text-[10px]">{displayBadge}</span>
           )}
         </div>
       )}
@@ -115,8 +120,26 @@ const Layout = ({ children }) => {
   const [health, setHealth] = useState({ status: 'loading' });
   const [isMobileOpen, setMobileOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const [time, setTime] = useState(new Date());
+  
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { isDemoMode, isPaused, toggleSimulation, systemHealth, alerts, events, evidence } = useSimulation();
+
+  const getDynamicBadge = (id) => {
+    switch (id) {
+      case 'alerts': return alerts.filter(a => a.status === 'NEW').length;
+      case 'events': return events.filter(e => e.status === 'NEW').length;
+      case 'evidence': return evidence.length;
+      default: return undefined;
+    }
+  };
+
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const checkHealth = async () => {
@@ -129,12 +152,13 @@ const Layout = ({ children }) => {
   }, []);
 
   // Format date for header
-  const currentDate = new Date().toLocaleDateString('en-US', { 
-    weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-  });
+  const timeString = time.toLocaleTimeString('en-US', { hour12: false });
+  const dateString = time.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
+  const tzString = 'IST'; // System requirement format example
 
   return (
     <div className="flex h-screen bg-background text-text font-sans overflow-hidden">
+      <CommandPalette isOpen={cmdOpen} setIsOpen={setCmdOpen} />
       
       {/* Mobile Sidebar Overlay */}
       <AnimatePresence>
@@ -202,6 +226,7 @@ const Layout = ({ children }) => {
                     item={item} 
                     isExpanded={isExpanded} 
                     setMobileOpen={setMobileOpen} 
+                    dynamicBadge={getDynamicBadge(item.id)}
                   />
                 ))}
               </nav>
@@ -233,41 +258,56 @@ const Layout = ({ children }) => {
               <Menu className="w-6 h-6" />
             </button>
             
-            {/* Global Search Mock */}
-            <div className="hidden md:flex items-center relative w-64 lg:w-96">
+            <div className="hidden md:flex items-center relative w-64 lg:w-96 cursor-text" onClick={() => setCmdOpen(true)}>
               <Search className="w-4 h-4 absolute left-3 text-textMuted" />
-              <input 
-                type="text" 
-                placeholder="Search cameras, zones, incidents..." 
-                className="w-full bg-slate-100 border-none rounded-md pl-9 pr-4 py-1.5 text-sm focus:ring-2 focus:ring-primary focus:bg-white transition-all outline-none"
-              />
+              <div className="w-full bg-slate-100 border-none rounded-md pl-9 pr-4 py-1.5 text-sm text-slate-400 flex items-center justify-between hover:bg-slate-200/70 transition-colors">
+                <span>Search system...</span>
+                <kbd className="font-mono text-[10px] bg-slate-300/50 px-1.5 rounded text-slate-500 font-bold">Ctrl K</kbd>
+              </div>
             </div>
           </div>
           
-          <div className="flex items-center gap-4 shrink-0">
-            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-100 text-xs font-medium text-textMuted">
-              <Video className="w-4 h-4" /> 
-              <span>12/12 Online</span>
-            </div>
-            
-            <div className="hidden sm:block text-xs font-medium text-textMuted border-r border-border pr-4">
-              {currentDate}
+          <div className="flex items-center gap-3 shrink-0">
+            {/* Global Demo Indicator */}
+            {isDemoMode && (
+              <button 
+                onClick={toggleSimulation}
+                className={cn(
+                  "hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-md text-[10px] font-bold tracking-widest uppercase transition-all shadow-sm border",
+                  isPaused 
+                    ? "bg-slate-100 text-slate-500 border-slate-200"
+                    : "bg-danger/10 text-danger border-danger/20"
+                )}
+              >
+                <span className={cn("w-2 h-2 rounded-full", isPaused ? "bg-slate-400" : "bg-danger animate-pulse")} />
+                {isPaused ? "Ⅱ DEMO PAUSED" : "● LIVE DEMO"}
+              </button>
+            )}
+
+            <div className="hidden sm:flex flex-col text-right border-r border-border pr-3">
+              <span className="text-xs font-bold text-text tracking-widest font-mono">{timeString}</span>
+              <span className="text-[9px] font-semibold text-textMuted tracking-wider">{dateString} {tzString}</span>
             </div>
 
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-success/10 border border-success/20">
               <span className={cn(
-                "w-2 h-2 rounded-full",
-                health.status === 'healthy' ? 'bg-success' : 
-                health.status === 'degraded' ? 'bg-warning' : 'bg-danger'
+                "w-2 h-2 rounded-full animate-pulse",
+                systemHealth.api > 90 ? 'bg-success' : 
+                systemHealth.api > 50 ? 'bg-warning' : 'bg-danger'
               )}></span>
               <span className="text-[10px] font-bold tracking-wide uppercase text-success hidden sm:block">
-                {health.status === 'healthy' ? 'System Online' : 
-                 health.status === 'degraded' ? 'Degraded' : 'Offline'}
+                {systemHealth.api > 90 ? 'System Online' : 
+                 systemHealth.api > 50 ? 'Degraded' : 'Offline'}
               </span>
             </div>
 
+            {/* Notifications */}
+            <div className="border-l border-r border-border px-2 mx-1 hidden sm:block">
+              <NotificationCenter />
+            </div>
+
             {/* Operator Profile */}
-            <div className="flex items-center gap-2 pl-2">
+            <div className="flex items-center gap-2 pl-1">
               <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center border border-primary/20">
                 <User className="w-4 h-4" />
               </div>

@@ -1,22 +1,27 @@
 import { useState, useEffect } from 'react';
-import { getCameras, addCamera } from '../services/api';
+import { getCameras, addCamera as addCameraApi } from '../services/api';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/Table';
-import { Search, Plus, MoreVertical, MapPin, Video, Wifi, WifiOff, Loader2, Play, Settings } from 'lucide-react';
+import { Search, Plus, MoreVertical, MapPin, Video, Wifi, WifiOff, Loader2, Play, Settings, Edit, Trash } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { VideoPlayer } from '../components/ui/VideoPlayer';
+import { useDataFusion } from '../hooks/useDataFusion';
+import { useSimulation } from '../contexts/SimulationContext';
 
 const Cameras = () => {
-  const [cameras, setCameras] = useState([]);
+  const [camerasData, setCamerasData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newCamera, setNewCamera] = useState({ name: '', camera_id: '', source_type: 'rtsp', source: '' });
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [newCamera, setNewCamera] = useState({ id: '', name: '', camera_id: '', source_type: 'rtsp', source: '' });
   const [availableDevices, setAvailableDevices] = useState([]);
   const [activeCamera, setActiveCamera] = useState(null);
   const [cameraEvents, setCameraEvents] = useState([]);
+
+  const { isDemoMode, addCamera, updateCamera, deleteCamera } = useSimulation();
 
   useEffect(() => {
     let unsubscribe = () => {};
@@ -68,15 +73,52 @@ const Cameras = () => {
   }, [isModalOpen]);
 
   const handleAddCamera = async () => {
-    try {
-      const addedCamera = await addCamera(newCamera);
-      setCameras([...cameras, { ...addedCamera, status: 'online', location: 'Local', capabilities: ['Standard'] }]);
+    if (isDemoMode) {
+      if (isEditMode) {
+        updateCamera(newCamera.id, newCamera);
+      } else {
+        addCamera(newCamera);
+      }
       setIsModalOpen(false);
-      setNewCamera({ name: '', camera_id: '', source_type: 'rtsp', source: '' });
+      resetModal();
+      return;
+    }
+
+    try {
+      if (isEditMode) {
+        // Mocking API update if it doesn't exist
+        alert("Real API update not implemented yet.");
+      } else {
+        const addedCamera = await addCameraApi(newCamera);
+        setCamerasData([...camerasData, { ...addedCamera, status: 'online', location: 'Local', capabilities: ['Standard'] }]);
+      }
+      setIsModalOpen(false);
+      resetModal();
     } catch (e) {
       console.error(e);
       alert(e.message || "Failed to add camera");
     }
+  };
+
+  const handleEditCamera = (cam) => {
+    setNewCamera({ ...cam, camera_id: cam.camera_id || cam.id, id: cam.id });
+    setIsEditMode(true);
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteCamera = (id) => {
+    if (confirm("Are you sure you want to delete this camera?")) {
+      if (isDemoMode) {
+        deleteCamera(id);
+      } else {
+        alert("Real API delete not implemented yet.");
+      }
+    }
+  };
+
+  const resetModal = () => {
+    setNewCamera({ id: '', name: '', camera_id: '', source_type: 'rtsp', source: '' });
+    setIsEditMode(false);
   };
 
   useEffect(() => {
@@ -84,7 +126,7 @@ const Cameras = () => {
       setIsLoading(true);
       try {
         const data = await getCameras();
-        setCameras(data.items || []);
+        setCamerasData(data.items || []);
       } catch (error) {
         console.error("Failed to load cameras", error);
       } finally {
@@ -95,9 +137,12 @@ const Cameras = () => {
     fetchCameras();
   }, []);
 
-  const filteredCameras = cameras.filter(cam => 
+  const fusedCameras = useDataFusion(camerasData, 'cameras');
+
+  const filteredCameras = fusedCameras.filter(cam => 
     cam.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    cam.location?.toLowerCase().includes(searchQuery.toLowerCase())
+    cam.location?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    cam.group?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -107,7 +152,7 @@ const Cameras = () => {
           <h1 className="text-2xl font-bold tracking-tight text-text">Camera Management</h1>
           <p className="text-textMuted text-sm mt-1">Manage connected cameras, IP streams, and video sources.</p>
         </div>
-        <Button className="shrink-0 gap-2" onClick={() => setIsModalOpen(true)}>
+        <Button className="shrink-0 gap-2" onClick={() => { resetModal(); setIsModalOpen(true); }}>
           <Plus className="w-4 h-4" />
           Add Camera
         </Button>
@@ -125,13 +170,14 @@ const Cameras = () => {
               className="w-full bg-white border border-slate-200 rounded-md pl-9 pr-4 py-2 text-sm text-text placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all shadow-sm"
             />
           </div>
-          <div className="hidden sm:flex text-sm font-medium text-textMuted">
-            {cameras.length} Total Cameras
+          <div className="hidden sm:flex text-sm font-medium text-textMuted flex-col items-end">
+            {fusedCameras.length} Total Cameras
+            {isDemoMode && <span className="text-xs text-primary font-bold">DEMO DATA ACTIVE</span>}
           </div>
         </div>
         
         <CardContent className="flex-1 overflow-auto p-0 bg-white">
-          {isLoading ? (
+          {isLoading && !isDemoMode ? (
             <div className="h-full flex flex-col items-center justify-center text-textMuted">
               <Loader2 className="w-8 h-8 animate-spin mb-4 text-primary" />
               <p>Loading camera network...</p>
@@ -153,12 +199,12 @@ const Cameras = () => {
                   <TableRow key={cam.camera_id || cam.id}>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        {cam.status === 'online' || cam.status === 'active' ? (
+                        {cam.status === 'online' || cam.status === 'ONLINE' || cam.status === 'active' ? (
                           <Wifi className="w-4 h-4 text-success" />
                         ) : (
                           <WifiOff className="w-4 h-4 text-danger" />
                         )}
-                        <Badge variant={cam.status === 'online' || cam.status === 'active' ? 'success' : 'danger'}>
+                        <Badge variant={cam.status === 'online' || cam.status === 'ONLINE' || cam.status === 'active' ? 'success' : 'danger'}>
                           {cam.status || 'offline'}
                         </Badge>
                       </div>
@@ -167,16 +213,17 @@ const Cameras = () => {
                       <div className="flex items-center gap-2">
                         <Video className="w-4 h-4 text-textMuted" />
                         {cam.name}
+                        {cam._isSimulated && <span className="text-[10px] bg-blue-100 text-blue-800 px-1 py-0.5 rounded ml-1">DEMO</span>}
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2 text-textMuted">
                         <MapPin className="w-4 h-4" />
-                        {cam.location || 'Local'}
+                        {cam.location || cam.zone || 'Local'}
                       </div>
                     </TableCell>
                     <TableCell className="font-mono text-xs text-textMuted bg-slate-50 px-2 py-1 rounded inline-block">
-                      {cam.source || 'N/A'}
+                      {cam.source || 'rtsp://...'}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1 flex-wrap">
@@ -192,11 +239,11 @@ const Cameras = () => {
                         <Button variant="ghost" className="p-2 h-8 w-8 text-primary hover:text-primary hover:bg-slate-100" onClick={() => setActiveCamera(cam)} title="Live Stream">
                           <Play className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" className="p-2 h-8 w-8 text-textMuted hover:bg-slate-100" title="Settings">
-                          <Settings className="w-4 h-4" />
+                        <Button variant="ghost" className="p-2 h-8 w-8 text-textMuted hover:bg-slate-100" onClick={() => handleEditCamera(cam)} title="Edit">
+                          <Edit className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" className="p-2 h-8 w-8 text-textMuted hover:bg-slate-100" title="More">
-                          <MoreVertical className="w-4 h-4" />
+                        <Button variant="ghost" className="p-2 h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDeleteCamera(cam.id)} title="Delete">
+                          <Trash className="w-4 h-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -216,11 +263,11 @@ const Cameras = () => {
         </CardContent>
       </Card>
 
-      {/* Add Camera Modal */}
+      {/* Add/Edit Camera Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-text/20 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white border border-border p-6 rounded-lg shadow-xl w-full max-w-md animate-in zoom-in-95 duration-200">
-            <h2 className="text-xl font-bold mb-4 text-text">Add New Camera</h2>
+            <h2 className="text-xl font-bold mb-4 text-text">{isEditMode ? 'Edit Camera' : 'Add New Camera'}</h2>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-text mb-1">Camera Name</label>
@@ -228,7 +275,7 @@ const Cameras = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-text mb-1">Camera ID</label>
-                <input type="text" className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white shadow-sm" value={newCamera.camera_id} onChange={e => setNewCamera({...newCamera, camera_id: e.target.value})} placeholder="e.g. CAM-01" />
+                <input type="text" className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white shadow-sm" value={newCamera.camera_id} onChange={e => setNewCamera({...newCamera, camera_id: e.target.value})} placeholder="e.g. CAM-01" disabled={isEditMode} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-text mb-1">Source Type</label>
@@ -263,7 +310,7 @@ const Cameras = () => {
             </div>
             <div className="mt-6 flex justify-end gap-3">
               <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-              <Button onClick={handleAddCamera}>Save Camera</Button>
+              <Button onClick={handleAddCamera}>{isEditMode ? 'Save Changes' : 'Save Camera'}</Button>
             </div>
           </div>
         </div>
@@ -274,18 +321,26 @@ const Cameras = () => {
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
           <div className="bg-surface border border-border p-2 rounded-lg shadow-xl w-full max-w-4xl animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center px-4 py-2 mb-2 border-b border-slate-100">
-              <h2 className="text-lg font-bold text-text">Live Stream: {activeCamera.name}</h2>
+              <h2 className="text-lg font-bold text-text flex items-center">
+                <Video className="w-5 h-5 mr-2" />
+                Live Stream: {activeCamera.name}
+              </h2>
               <Button variant="ghost" className="h-8 text-textMuted" onClick={() => setActiveCamera(null)}>Close</Button>
             </div>
-            <div className="aspect-video w-full relative bg-black rounded-md overflow-hidden">
-              <VideoPlayer 
-                src={null} 
-                cameraName={activeCamera.name} 
-                className="w-full h-full"
-              />
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                 <p className="bg-black/50 px-4 py-2 rounded text-white text-sm">Live stream unavailable</p>
-              </div>
+            <div className="aspect-video w-full relative bg-black rounded-md overflow-hidden flex items-center justify-center">
+              {isDemoMode ? (
+                <div className="text-center text-slate-400">
+                  <Play className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                  <p>Demo Mode Stream Active</p>
+                  <p className="text-xs text-slate-500 mt-1">Simulated output</p>
+                </div>
+              ) : (
+                <VideoPlayer 
+                  src={null} 
+                  cameraName={activeCamera.name} 
+                  className="w-full h-full"
+                />
+              )}
             </div>
           </div>
         </div>

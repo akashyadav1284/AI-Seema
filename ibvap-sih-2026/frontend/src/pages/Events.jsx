@@ -5,12 +5,15 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/Table';
 import { Search, Filter, Download, Activity, Loader2, Calendar } from 'lucide-react';
+import { useDataFusion } from '../hooks/useDataFusion';
+import { EventDrawer } from '../components/ui/EventDrawer';
 
 const Events = () => {
   const [events, setEvents] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterSeverity, setFilterSeverity] = useState('all');
+  const [selectedEvent, setSelectedEvent] = useState(null);
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -49,12 +52,17 @@ const Events = () => {
     });
   }, []);
 
-  const filteredEvents = events.filter(evt => {
+  const fusedEvents = useDataFusion(events, 'events');
+
+  const filteredEvents = fusedEvents.filter(evt => {
     const matchesSearch = 
       evt.event_type?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      evt.camera_id?.toLowerCase().includes(searchQuery.toLowerCase());
+      evt.type?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      evt.camera_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      evt.camera?.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesSeverity = filterSeverity === 'all' || evt.severity === filterSeverity;
+    const matchesSeverity = filterSeverity === 'all' || 
+                            evt.severity?.toLowerCase() === filterSeverity.toLowerCase();
     
     return matchesSearch && matchesSeverity;
   });
@@ -100,8 +108,9 @@ const Events = () => {
             >
               <option value="all">All Severities</option>
               <option value="critical">Critical</option>
-              <option value="warning">Warning</option>
-              <option value="info">Info</option>
+              <option value="warning">Warning / High</option>
+              <option value="medium">Medium</option>
+              <option value="info">Low / Info</option>
             </select>
           </div>
         </div>
@@ -122,47 +131,57 @@ const Events = () => {
                   <TableHead>Camera Source</TableHead>
                   <TableHead>Track/Zone</TableHead>
                   <TableHead>Details</TableHead>
-                  <TableHead className="text-right">Evidence</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredEvents.map((evt) => (
-                  <TableRow key={evt.event_id || evt.id}>
+                {filteredEvents.map((evt) => {
+                  const e_id = evt.event_id || evt.id;
+                  const e_timestamp = evt.timestamp 
+                    ? (typeof evt.timestamp === 'string' ? new Date(evt.timestamp) : new Date(evt.timestamp * 1000))
+                    : new Date();
+                    
+                  return (
+                  <TableRow 
+                    key={e_id} 
+                    className="cursor-pointer hover:bg-slate-50 transition-colors"
+                    onClick={() => setSelectedEvent(evt)}
+                  >
                     <TableCell className="font-mono text-xs text-textMuted">
-                      {new Date(evt.timestamp * 1000 || Date.now()).toLocaleString()}
+                      {e_timestamp.toLocaleString()}
                     </TableCell>
                     <TableCell className="font-semibold text-text uppercase text-xs tracking-wider">
-                      {evt.event_type}
+                      {evt.event_type || evt.type}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={evt.severity === 'critical' ? 'danger' : evt.severity === 'warning' ? 'warning' : 'info'}>
+                      <Badge variant={evt.severity?.toLowerCase() === 'critical' ? 'danger' : evt.severity?.toLowerCase() === 'high' ? 'danger' : evt.severity?.toLowerCase() === 'warning' || evt.severity?.toLowerCase() === 'medium' ? 'warning' : 'info'}>
                         {evt.severity || 'info'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-textMuted font-medium text-sm">
-                      {evt.camera_id || 'N/A'}
+                      {evt.camera_id || evt.camera || 'N/A'}
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
-                        {evt.track_id && <span className="text-xs text-textMuted font-mono">ID: #{evt.track_id}</span>}
-                        {evt.zone_id && <Badge variant="warning" className="text-[10px] w-fit px-1.5 py-0">{evt.zone_id}</Badge>}
-                        {!evt.track_id && !evt.zone_id && <span className="text-slate-400 text-xs">-</span>}
+                        {evt.track && <span className="text-xs text-textMuted font-mono">ID: #{evt.track}</span>}
+                        {(evt.zone_id || evt.zone) && <Badge variant="warning" className="text-[10px] w-fit px-1.5 py-0">{evt.zone_id || evt.zone}</Badge>}
+                        {!evt.track && !evt.zone_id && !evt.zone && <span className="text-slate-400 text-xs">-</span>}
                       </div>
                     </TableCell>
                     <TableCell className="text-textMuted max-w-xs truncate text-sm">
                       {evt.description || evt.reason || 'No additional details provided.'}
                     </TableCell>
                     <TableCell className="text-right">
-                      {evt.evidence ? (
-                        <Button variant="secondary" size="sm" onClick={() => window.location.href = '/evidence'}>
-                          View Evidence
-                        </Button>
-                      ) : (
-                        <span className="text-slate-400 text-xs pr-4">-</span>
-                      )}
+                      <Button variant="secondary" size="sm" onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedEvent(evt);
+                      }}>
+                        Investigate
+                      </Button>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           ) : (
@@ -176,6 +195,12 @@ const Events = () => {
           )}
         </CardContent>
       </Card>
+      
+      <EventDrawer 
+        event={selectedEvent} 
+        isOpen={!!selectedEvent} 
+        onClose={() => setSelectedEvent(null)} 
+      />
     </div>
   );
 };

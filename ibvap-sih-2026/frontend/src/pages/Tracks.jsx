@@ -4,15 +4,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/Table';
 import { Crosshair, MoveRight, Loader2, Activity } from 'lucide-react';
+import { useDataFusion } from '../hooks/useDataFusion';
 
 const Tracks = () => {
-  const [tracks, setTracks] = useState([]);
+  const [realTracks, setRealTracks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const handleTracksUpdate = (data) => {
       const updatedTracks = Array.isArray(data) ? data : data.tracks || [];
-      setTracks(updatedTracks);
+      setRealTracks(updatedTracks);
       setIsLoading(false);
     };
 
@@ -26,6 +27,8 @@ const Tracks = () => {
     };
   }, []);
 
+  const fusedTracks = useDataFusion(realTracks, 'tracks');
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500 flex flex-col h-[calc(100vh-6rem)]">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -34,9 +37,14 @@ const Tracks = () => {
           <p className="text-textMuted text-sm mt-1">Real-time object tracking and movement analysis across all cameras.</p>
         </div>
         <div className="flex items-center gap-2">
+          {fusedTracks.length > 0 && fusedTracks[0]?._isSimulated && (
+            <Badge variant="info" className="px-3 py-1 text-sm shadow-sm font-bold tracking-wider">
+              DEMO DATA
+            </Badge>
+          )}
           <Badge variant="success" className="animate-pulse px-3 py-1 text-sm shadow-sm font-bold tracking-wider">
             <Activity className="w-4 h-4 mr-2 inline" />
-            LIVE DATA
+            LIVE
           </Badge>
         </div>
       </div>
@@ -45,19 +53,19 @@ const Tracks = () => {
         <CardHeader className="py-4 px-5 border-b border-border bg-slate-50 flex flex-row items-center justify-between">
           <CardTitle className="text-sm uppercase tracking-widest font-bold text-textMuted flex items-center">
             <Crosshair className="w-4 h-4 mr-2" />
-            Active Tracked Objects ({tracks.length})
+            Active Tracked Objects ({fusedTracks.length})
           </CardTitle>
         </CardHeader>
         
         <CardContent className="flex-1 overflow-auto p-0 custom-scrollbar">
-          {isLoading ? (
+          {isLoading && fusedTracks.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-textMuted">
               <Loader2 className="w-8 h-8 animate-spin mb-4 text-primary" />
               <p>Waiting for tracker stream...</p>
             </div>
-          ) : tracks.length > 0 ? (
+          ) : fusedTracks.length > 0 ? (
             <Table>
-              <TableHeader className="sticky top-0 z-10 border-b border-border">
+              <TableHeader className="sticky top-0 z-10 border-b border-border bg-white">
                 <TableRow>
                   <TableHead>Track ID</TableHead>
                   <TableHead>Class</TableHead>
@@ -68,21 +76,21 @@ const Tracks = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {tracks.map((track) => (
+                {fusedTracks.map((track) => (
                   <TableRow key={track.track_id || track.id}>
                     <TableCell className="font-mono text-sm text-textMuted">
                       #{track.track_id || track.id || 'N/A'}
                     </TableCell>
                     <TableCell>
                       <Badge variant="info" className="uppercase text-[10px] font-bold">
-                        {track.class_label || track.class || 'Unknown'}
+                        {track.class_label || track.class || track.type || 'Unknown'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-textMuted font-medium">
-                      {Math.round((track.confidence || 0) * 100)}%
+                      {Math.round((track.confidence || 0))} {track.confidence <= 1 ? '%' : '%'}
                     </TableCell>
                     <TableCell className="text-text font-medium">
-                      {track.camera_name || track.camera_id || 'N/A'}
+                      {track.camera_name || track.camera || track.camera_id || 'N/A'}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2 text-textMuted font-medium">
@@ -98,6 +106,10 @@ const Tracks = () => {
                                {z}
                              </Badge>
                            ))
+                        ) : track.zone ? (
+                           <Badge variant="warning" className="text-[10px] px-1.5 py-0 font-medium">
+                               {track.zone}
+                             </Badge>
                         ) : (
                           <span className="text-slate-300 text-xs">-</span>
                         )}

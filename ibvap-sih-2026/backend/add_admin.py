@@ -1,6 +1,7 @@
 import asyncio
 import os
 import sys
+import datetime
 
 # Add backend directory to sys.path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -22,23 +23,23 @@ async def main():
     
     user = {
         "email": email,
-        "hashed_password": hashed_password,
+        "password_hash": hashed_password,
         "role": "admin",
         "is_active": True,
-        "full_name": "System Administrator"
+        "name": "System Administrator",
+        "_id": "USR-ADMIN",
+        "created_at": datetime.datetime.utcnow().isoformat(),
+        "updated_at": datetime.datetime.utcnow().isoformat()
     }
     
-    # Use update_one with upsert to avoid duplicate key errors if it already exists
-    result = await db["users"].update_one(
-        {"email": email},
-        {"$set": user},
-        upsert=True
-    )
+    # Delete existing user to avoid _id immutability errors
+    await db["users"].delete_many({"email": email})
+    result = await db["users"].insert_one(user)
     
-    if result.upserted_id:
+    if result.inserted_id:
         print(f"User {email} created successfully.")
     else:
-        print(f"User {email} updated successfully.")
+        print(f"Failed to create user {email}.")
         
     await close_mongo_connection()
 

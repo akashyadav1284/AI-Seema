@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import { SimulationProvider } from './contexts/SimulationContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -13,6 +14,9 @@ import SystemHealth from './pages/SystemHealth';
 import Zones from './pages/Zones';
 import Tracks from './pages/Tracks';
 import Evidence from './pages/Evidence';
+import Settings from './pages/Settings';
+import Reports from './pages/Reports';
+import LiveMap from './pages/LiveMap';
 
 // Placeholder components for new routes to ensure routing works
 const PlaceholderPage = ({ title }) => (
@@ -26,6 +30,7 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <SimulationProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
           
@@ -36,18 +41,20 @@ function App() {
           }>
             <Route path="/" element={<Dashboard />} />
             <Route path="/live" element={<LiveMonitoring />} />
+            <Route path="/live-map" element={<LiveMap />} />
             <Route path="/cameras" element={<Cameras />} />
             <Route path="/alerts" element={<Alerts />} />
             <Route path="/events" element={<Events />} />
             <Route path="/analytics" element={<Analytics />} />
-            <Route path="/reports" element={<PlaceholderPage title="Automated Reports" />} />
+            <Route path="/reports" element={<Reports />} />
             <Route path="/health" element={<SystemHealth />} />
-            <Route path="/settings" element={<PlaceholderPage title="System Settings" />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="/zones" element={<Zones />} />
             <Route path="/tracks" element={<Tracks />} />
             <Route path="/evidence" element={<Evidence />} />
           </Route>
         </Routes>
+        </SimulationProvider>
       </AuthProvider>
     </BrowserRouter>
   );
